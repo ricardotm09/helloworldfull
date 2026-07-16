@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Click Counter</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin-top: 80px;
+      background: #f4f6f8;
+      color: #222;
+    }
+    button {
+      padding: 12px 20px;
+      font-size: 16px;
+      cursor: pointer;
+      border: none;
+      border-radius: 6px;
+      background: #2563eb;
+      color: white;
+    }
+    #count {
+      font-size: 24px;
+      margin-top: 20px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h1>Hello World Click Counter</h1>
+  <button onclick="incrementCount()">Click me</button>
+  <div id="count">Clicks: 0</div>
+
+  <script>
+    let count = 0;
+    async function incrementCount() {
+      const response = await fetch('/count', { method: 'POST' });
+      const data = await response.json();
+      count = data.count;
+      document.getElementById('count').textContent = `Clicks: ${count}`;
+    }
+  </script>
+</body>
+</html>
