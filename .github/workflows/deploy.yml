@@ -24,8 +24,8 @@ env:
   AKS_NAME: aks-${{ github.run_id }}
   AKS_DNS_PREFIX: aks-${{ github.run_id }}
   K8S_NAMESPACE: default
-  TF_STATE_RESOURCE_GROUP: rg-tfstate-${{ github.run_id }}
-  TF_STATE_STORAGE_ACCOUNT: tfstate${{ github.run_id }}
+  TF_STATE_RESOURCE_GROUP: rg-tfstate-${{ toLower(github.event.repository.name) }}
+  TF_STATE_STORAGE_ACCOUNT: tfstate${{ toLower(github.event.repository.name) }}
   TF_STATE_CONTAINER: terraform
   TF_STATE_KEY: dev.terraform.tfstate
   IMAGE_REPOSITORY: click-counter
