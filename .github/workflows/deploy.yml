@@ -1,0 +1,135 @@
+name: Build and Deploy to AKS
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  ARM_USE_OIDC: true
+  LOCATION: eastus
+  RESOURCE_GROUP_NAME: rg-${{ github.event.repository.name }}-${{ github.run_id }}
+  ACR_NAME_PREFIX: acr${{ github.run_id }}
+  AKS_NAME: aks-${{ github.run_id }}
+  AKS_DNS_PREFIX: aks-${{ github.run_id }}
+  K8S_NAMESPACE: default
+  TF_STATE_RESOURCE_GROUP: rg-tfstate-${{ github.run_id }}
+  TF_STATE_STORAGE_ACCOUNT: tfstate${{ github.run_id }}
+  TF_STATE_CONTAINER: terraform
+  TF_STATE_KEY: dev.terraform.tfstate
+  IMAGE_REPOSITORY: click-counter
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    environment:
+      name: dev
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Create Terraform backend storage
+        run: |
+          az group create --name "${{ env.TF_STATE_RESOURCE_GROUP }}" --location "${{ env.LOCATION }}"
+
+          if ! az storage account show --name "${{ env.TF_STATE_STORAGE_ACCOUNT }}" --resource-group "${{ env.TF_STATE_RESOURCE_GROUP }}" >/dev/null 2>&1; then
+            az storage account create \
+              --name "${{ env.TF_STATE_STORAGE_ACCOUNT }}" \
+              --resource-group "${{ env.TF_STATE_RESOURCE_GROUP }}" \
+              --location "${{ env.LOCATION }}" \
+              --sku Standard_LRS \
+              --allow-blob-public-access false \
+              --https-only true
+          fi
+
+          az storage container create \
+            --name "${{ env.TF_STATE_CONTAINER }}" \
+            --account-name "${{ env.TF_STATE_STORAGE_ACCOUNT }}" \
+            --auth-mode login
+
+      - name: Terraform init
+        working-directory: terraform/environments/dev
+        run: |
+          terraform init -reconfigure \
+            -backend-config="resource_group_name=${{ env.TF_STATE_RESOURCE_GROUP }}" \
+            -backend-config="storage_account_name=${{ env.TF_STATE_STORAGE_ACCOUNT }}" \
+            -backend-config="container_name=${{ env.TF_STATE_CONTAINER }}" \
+            -backend-config="key=${{ env.TF_STATE_KEY }}"
+
+      - name: Terraform plan
+        working-directory: terraform/environments/dev
+        run: |
+          terraform plan -out=tfplan \
+            -var="resource_group_name=${{ env.RESOURCE_GROUP_NAME }}" \
+            -var="location=${{ env.LOCATION }}" \
+            -var="acr_name_prefix=${{ env.ACR_NAME_PREFIX }}" \
+            -var="aks_name=${{ env.AKS_NAME }}" \
+            -var="aks_dns_prefix=${{ env.AKS_DNS_PREFIX }}"
+
+      - name: Manual approval gate
+        uses: trstringer/manual-approval@v1
+        with:
+          secret: ${{ github.TOKEN }}
+          approvers: ${{ github.actor }}
+          minimum-approvals: 1
+          issue-title: "Approve AKS deployment"
+          issue-body: "Please review the Terraform plan and approve this deployment."
+
+      - name: Terraform apply
+        working-directory: terraform/environments/dev
+        run: |
+          terraform apply -auto-approve tfplan
+
+      - name: Get ACR details
+        working-directory: terraform/environments/dev
+        id: acr
+        run: |
+          echo "acr_name=$(terraform output -raw acr_name)" >> "$GITHUB_OUTPUT"
+          echo "acr_login_server=$(terraform output -raw acr_login_server)" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to Azure Container Registry
+        run: |
+          az acr login --name "${{ steps.acr.outputs.acr_name }}"
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ steps.acr.outputs.acr_login_server }}/click-counter:${{ env.IMAGE_TAG }}
+
+      - name: Set AKS context
+        run: |
+          az aks get-credentials --resource-group "${{ env.RESOURCE_GROUP_NAME }}" --name "${{ env.AKS_NAME }}" --overwrite-existing
+
+      - name: Deploy to AKS
+        run: |
+          envsubst < k8s/deployment.yaml | kubectl apply -f -
+          kubectl rollout status deployment/click-counter -n "${{ env.K8S_NAMESPACE }}" --timeout=180s
+        env:
+          IMAGE_NAME: ${{ steps.acr.outputs.acr_login_server }}/click-counter:${{ env.IMAGE_TAG }}

@@ -48,3 +48,27 @@ variable "tags" {
     project     = "helloworldfull"
   }
 }
+
+variable "state_resource_group_name" {
+  description = "Resource group that contains the Terraform state storage account"
+  type        = string
+  default     = "terraform-rg"
+}
+
+variable "state_storage_account_name" {
+  description = "Storage account name used for Terraform remote state"
+  type        = string
+  default     = "terraform87"
+}
+
+variable "state_container_name" {
+  description = "Blob container name for Terraform remote state"
+  type        = string
+  default     = "terraform"
+}
+
+variable "state_key" {
+  description = "State file key name"
+  type        = string
+  default     = "dev.terraform.tfstate"
+}

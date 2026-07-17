@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: click-counter
-          image: acraks.azurecr.io/click-counter-app:latest
+          image: ${IMAGE_NAME}
           imagePullPolicy: Always
           ports:
             - containerPort: 3000
