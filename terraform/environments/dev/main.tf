@@ -2,7 +2,11 @@ terraform {
   required_version = ">= 1.5.0"
 
   backend "azurerm" {
-    use_azuread_auth = true
+    resource_group_name  = "rg-tfstate-87"
+    storage_account_name = "tfstate87"
+    container_name       = "terraform"
+    key                  = "dev.terraform.tfstate"
+    use_azuread_auth     = true
   }
 
   required_providers {
@@ -34,8 +38,7 @@ resource "azurerm_resource_group" "rg" {
 }
 
 resource "azurerm_container_registry" "acr" {
-#   name                = lower("${var.acr_name_prefix}${random_string.acr_suffix.result}")
-  name                = lower("${var.acr_name_prefix}")
+  name                = var.acr_name
   resource_group_name = azurerm_resource_group.rg.name
   location            = azurerm_resource_group.rg.location
   sku                 = "Basic"

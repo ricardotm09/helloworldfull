@@ -24,10 +24,6 @@ env:
   AKS_NAME: aks-${{ github.run_id }}
   AKS_DNS_PREFIX: aks-${{ github.run_id }}
   K8S_NAMESPACE: default
-  TF_STATE_RESOURCE_GROUP: rg-tfstate-87
-  TF_STATE_STORAGE_ACCOUNT: tfstate87
-  TF_STATE_CONTAINER: terraform
-  TF_STATE_KEY: dev.terraform.tfstate
   IMAGE_REPOSITORY: click-counter
   IMAGE_TAG: ${{ github.sha }}
 
@@ -57,54 +53,15 @@ jobs:
         with:
           terraform_version: 1.8.5
 
-      - name: Create Terraform backend storage
-        run: |
-          az group create --name "${{ env.TF_STATE_RESOURCE_GROUP }}" --location "${{ env.LOCATION }}"
-
-          if ! az storage account show --name "${{ env.TF_STATE_STORAGE_ACCOUNT }}" --resource-group "${{ env.TF_STATE_RESOURCE_GROUP }}" >/dev/null 2>&1; then
-            az storage account create \
-              --name "${{ env.TF_STATE_STORAGE_ACCOUNT }}" \
-              --resource-group "${{ env.TF_STATE_RESOURCE_GROUP }}" \
-              --location "${{ env.LOCATION }}" \
-              --sku Standard_LRS \
-              --allow-blob-public-access false \
-              --https-only true
-          fi
-
-          az storage container create \
-            --name "${{ env.TF_STATE_CONTAINER }}" \
-            --account-name "${{ env.TF_STATE_STORAGE_ACCOUNT }}" \
-            --auth-mode login
-
-      - name: Get Terraform backend access key
-        shell: bash
-        run: |
-          set -euo pipefail
-          STORAGE_ACCESS_KEY=$(az storage account keys list \
-            --resource-group "${{ env.TF_STATE_RESOURCE_GROUP }}" \
-            --account-name "${{ env.TF_STATE_STORAGE_ACCOUNT }}" \
-            --query "[0].value" -o tsv)
-          echo "TF_STATE_ACCESS_KEY=$STORAGE_ACCESS_KEY" >> "$GITHUB_ENV"
-
       - name: Terraform init
         working-directory: terraform/environments/dev
         run: |
-          terraform init -reconfigure \
-            -backend-config="resource_group_name=${{ env.TF_STATE_RESOURCE_GROUP }}" \
-            -backend-config="storage_account_name=${{ env.TF_STATE_STORAGE_ACCOUNT }}" \
-            -backend-config="container_name=${{ env.TF_STATE_CONTAINER }}" \
-            -backend-config="key=${{ env.TF_STATE_KEY }}" \
-            -backend-config="access_key=${TF_STATE_ACCESS_KEY}"
+          terraform init -reconfigure
 
       - name: Terraform plan
         working-directory: terraform/environments/dev
         run: |
-          terraform plan -out=tfplan \
-            -var="resource_group_name=${{ env.RESOURCE_GROUP_NAME }}" \
-            -var="location=${{ env.LOCATION }}" \
-            -var="acr_name_prefix=${{ env.ACR_NAME_PREFIX }}" \
-            -var="aks_name=${{ env.AKS_NAME }}" \
-            -var="aks_dns_prefix=${{ env.AKS_DNS_PREFIX }}"
+          terraform plan -out=tfplan
 
       - name: Manual approval gate
         uses: trstringer/manual-approval@v1

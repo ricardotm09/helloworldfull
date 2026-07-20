@@ -1,7 +1,7 @@
 variable "resource_group_name" {
   description = "Name of the Azure resource group"
   type        = string
-  default     = "rg-aks-dev"
+  default     = "rx-rg-aks-dev"
 }
 
 variable "location" {
@@ -10,22 +10,22 @@ variable "location" {
   default     = "eastus"
 }
 
-variable "acr_name_prefix" {
+variable "acr_name" {
   description = "Prefix for the Azure Container Registry name. A unique suffix will be added automatically."
   type        = string
-  default     = "acraks"
+  default     = "rx-acr-aks"
 }
 
 variable "aks_name" {
   description = "Name of the AKS cluster"
   type        = string
-  default     = "aks-dev"
+  default     = "rx-aks-dev"
 }
 
-variable "aks_dns_prefix" {
+variable "aks_dns" {
   description = "DNS prefix for the AKS cluster"
   type        = string
-  default     = "aks-dev"
+  default     = "rx-aks-dev"
 }
 
 variable "aks_node_count" {
@@ -52,7 +52,7 @@ variable "tags" {
 variable "state_resource_group_name" {
   description = "Resource group that contains the Terraform state storage account"
   type        = string
-  default     = "terraform-rg"
+  default     = "rx-terraform-rg"
 }
 
 variable "state_storage_account_name" {
