@@ -22,7 +22,7 @@ variable "aks_name" {
   default     = "rx-aks-dev"
 }
 
-variable "aks_dns" {
+variable "aks_dns_prefix" {
   description = "DNS prefix for the AKS cluster"
   type        = string
   default     = "rx-aks-dev"
