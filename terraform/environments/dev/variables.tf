@@ -13,7 +13,7 @@ variable "location" {
 variable "acr_name" {
   description = "Prefix for the Azure Container Registry name. A unique suffix will be added automatically."
   type        = string
-  default     = "rx-acr-aks"
+  default     = "acraks"
 }
 
 variable "aks_name" {
