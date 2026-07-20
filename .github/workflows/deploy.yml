@@ -9,6 +9,7 @@ on:
 permissions:
   id-token: write
   contents: read
+  issues: write
 
 env:
   AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
@@ -61,7 +62,7 @@ jobs:
       - name: Manual approval gate
         uses: trstringer/manual-approval@v1
         with:
-          secret: ${{ github.TOKEN }}
+          secret: ${{ secrets.GITHUB_TOKEN }}
           approvers: ${{ github.actor }}
           minimum-approvals: 1
           issue-title: "Approve AKS deployment"
