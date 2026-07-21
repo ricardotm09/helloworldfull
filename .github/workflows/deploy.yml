@@ -15,9 +15,9 @@ permissions:
   contents: read
 
 env:
-  AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-  AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-  AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+  AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+  AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
   K8S_NAMESPACE: default
   IMAGE_REPOSITORY: click-counter
   IMAGE_TAG: ${{ github.sha }}
@@ -29,6 +29,13 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Validate Azure auth inputs
+        run: |
+          if [ -z "${{ env.AZURE_CLIENT_ID }}" ] || [ -z "${{ env.AZURE_TENANT_ID }}" ] || [ -z "${{ env.AZURE_SUBSCRIPTION_ID }}" ]; then
+            echo "::error::Missing AZURE_CLIENT_ID, AZURE_TENANT_ID, or AZURE_SUBSCRIPTION_ID. Set them in Repository Settings -> Secrets and variables -> Actions -> Variables."
+            exit 1
+          fi
 
       - name: Azure login
         uses: azure/login@v2
@@ -84,6 +91,13 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Validate Azure auth inputs
+        run: |
+          if [ -z "${{ env.AZURE_CLIENT_ID }}" ] || [ -z "${{ env.AZURE_TENANT_ID }}" ] || [ -z "${{ env.AZURE_SUBSCRIPTION_ID }}" ]; then
+            echo "::error::Missing AZURE_CLIENT_ID, AZURE_TENANT_ID, or AZURE_SUBSCRIPTION_ID. Set them in Repository Settings -> Secrets and variables -> Actions -> Variables."
+            exit 1
+          fi
 
       - name: Azure login
         uses: azure/login@v2
