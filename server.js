@@ -12,9 +12,15 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  if (req.url === '/health') {
+  if (req.url === '/health' || req.url === '/health/ready') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ status: 'ok' }));
+    res.end(JSON.stringify({ status: 'ok', check: 'ready' }));
+    return;
+  }
+
+  if (req.url === '/health/live') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ status: 'ok', check: 'live' }));
     return;
   }
 

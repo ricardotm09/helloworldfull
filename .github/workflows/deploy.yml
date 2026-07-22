@@ -165,3 +165,31 @@ jobs:
           kubectl rollout status deployment/click-counter -n "${{ env.K8S_NAMESPACE }}" --timeout=180s
         env:
           IMAGE_NAME: ${{ steps.deploy_targets.outputs.acr_login_server }}/click-counter:${{ env.IMAGE_TAG }}
+
+      - name: Resolve service endpoint
+        id: service_endpoint
+        run: |
+          for attempt in $(seq 1 20); do
+            service_ip=$(kubectl get svc click-counter -n "${{ env.K8S_NAMESPACE }}" -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+            service_hostname=$(kubectl get svc click-counter -n "${{ env.K8S_NAMESPACE }}" -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+
+            if [ -n "$service_ip" ]; then
+              echo "url=http://$service_ip" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+
+            if [ -n "$service_hostname" ]; then
+              echo "url=http://$service_hostname" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+
+            echo "Waiting for LoadBalancer endpoint... attempt $attempt/20"
+            sleep 15
+          done
+
+          echo "::error::Timed out waiting for the AKS service external endpoint."
+          exit 1
+
+      - name: Smoke test deployment
+        run: |
+          curl --fail --silent --show-error "${{ steps.service_endpoint.outputs.url }}/health/ready"
