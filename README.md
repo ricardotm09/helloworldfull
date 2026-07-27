@@ -104,3 +104,31 @@ az storage container create \
 ```
 
 These setup steps are a good fit for a README because they are operational prerequisites for the project and are easier to reuse than hiding them in a workflow or a one-off shell history.
+
+## Branch protection baseline (recommended)
+Apply these settings to the main branch:
+
+- Require a pull request before merging.
+- Require at least 1 approval for all changes.
+- Dismiss stale approvals when new commits are pushed.
+- Require status checks to pass before merging.
+- Set required check to: PR Validation / terraform-validate.
+- Set required check to: Enforce Action Pinning / check-pinned-actions.
+- Include administrators in branch protection.
+- Restrict force pushes and branch deletion.
+
+This keeps terraform format, validate, and plan checks mandatory before code reaches deploy.
+
+## CI supply chain hardening
+GitHub Actions in these workflows are pinned to immutable commit SHAs:
+
+- .github/workflows/pr-validation.yml
+- .github/workflows/deploy.yml
+
+Review and update those SHA pins on a regular cadence (for example, monthly) to pull in upstream security fixes in a controlled way.
+
+This repository includes an automated monthly updater workflow:
+
+- .github/workflows/action-sha-update.yml
+
+It runs on a monthly schedule and can also be run manually. When newer SHAs are available for the pinned action major tags, it opens a pull request with the updates.

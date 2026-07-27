@@ -1,0 +1,53 @@
+name: Enforce Action Pinning
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  check-pinned-actions:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Validate all GitHub Actions are SHA pinned
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          fail_count=0
+
+          while IFS=: read -r file line ref; do
+            if [[ "$ref" == ./* ]] || [[ "$ref" == docker://* ]]; then
+              continue
+            fi
+
+            if [[ "$ref" != *"@"* ]]; then
+              echo "::error file=${file},line=${line}::Action reference '${ref}' is missing @<sha>."
+              fail_count=$((fail_count + 1))
+              continue
+            fi
+
+            version_part="${ref##*@}"
+            if [[ ! "$version_part" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "::error file=${file},line=${line}::Action reference '${ref}' is not pinned to a 40-char commit SHA."
+              fail_count=$((fail_count + 1))
+            fi
+          done < <(grep -RnoE '^\s*uses:\s*[^[:space:]]+' .github/workflows \
+            | sed -E 's/^([^:]+):([0-9]+):\s*uses:\s*([^[:space:]]+)$/\1:\2:\3/')
+
+          if [[ "$fail_count" -gt 0 ]]; then
+            echo "Found ${fail_count} non-compliant action reference(s)."
+            exit 1
+          fi
+
+          echo "All external GitHub Action references are pinned to commit SHAs."

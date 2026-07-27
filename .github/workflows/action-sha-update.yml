@@ -1,0 +1,83 @@
+name: Update Pinned Action SHAs
+
+on:
+  schedule:
+    - cron: '0 6 1 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-action-shas:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Update pinned action SHAs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          files=(
+            ".github/workflows/deploy.yml"
+            ".github/workflows/pr-validation.yml"
+          )
+
+          while IFS= read -r line; do
+            action_ref="$(echo "$line" | awk '{print $1}')"
+            comment_tag="$(echo "$line" | awk '{print $2}')"
+
+            action_repo="${action_ref%@*}"
+            major_tag="$comment_tag"
+
+            latest_sha="$(git ls-remote "https://github.com/${action_repo}" "refs/tags/${major_tag}" | awk '{print $1}' | head -n 1)"
+
+            if [ -z "$latest_sha" ]; then
+              echo "Could not resolve ${action_repo}@${major_tag}; skipping"
+              continue
+            fi
+
+            for file in "${files[@]}"; do
+              if grep -qE "uses: ${action_repo}@[0-9a-f]{40} # ${major_tag}" "$file"; then
+                sed -i -E "s|uses: ${action_repo}@[0-9a-f]{40} # ${major_tag}|uses: ${action_repo}@${latest_sha} # ${major_tag}|g" "$file"
+                echo "Updated ${action_repo} in ${file}"
+              fi
+            done
+          done << 'EOF'
+          actions/checkout@sha v4
+          azure/login@sha v2
+          hashicorp/setup-terraform@sha v3
+          actions/upload-artifact@sha v4
+          actions/download-artifact@sha v4
+          docker/setup-buildx-action@sha v3
+          docker/build-push-action@sha v6
+          EOF
+
+      - name: Detect changes
+        id: detect
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create pull request
+        if: steps.detect.outputs.has_changes == 'true'
+        uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7
+        with:
+          commit-message: "chore(ci): rotate pinned GitHub Action SHAs"
+          title: "chore(ci): rotate pinned GitHub Action SHAs"
+          body: |
+            Automated monthly update of pinned GitHub Action SHAs.
+
+            - Source tags remain pinned by major version comments (for example: # v4)
+            - Workflow files updated: deploy and PR validation
+          branch: chore/rotate-action-shas
+          delete-branch: true
+          labels: ci,security,dependencies
