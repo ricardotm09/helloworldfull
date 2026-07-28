@@ -14,7 +14,9 @@ WORKDIR /app
 RUN rm -rf /usr/local/lib/node_modules/npm \
   && rm -f /usr/local/bin/npm /usr/local/bin/npx
 
-COPY --from=build /app ./
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/server.js ./server.js
+COPY --from=build /app/index.html ./index.html
 
 EXPOSE 3000
 
