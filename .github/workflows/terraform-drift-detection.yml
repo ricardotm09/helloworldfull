@@ -1,0 +1,93 @@
+name: Terraform Drift Detection
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+  AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+  AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  ARM_USE_OIDC: true
+
+jobs:
+  drift-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Validate Azure auth inputs
+        run: |
+          if [ -z "${{ env.AZURE_CLIENT_ID }}" ] || [ -z "${{ env.AZURE_TENANT_ID }}" ] || [ -z "${{ env.AZURE_SUBSCRIPTION_ID }}" ]; then
+            echo "::error::Missing AZURE_CLIENT_ID, AZURE_TENANT_ID, or AZURE_SUBSCRIPTION_ID. Set them in Repository Settings -> Secrets and variables -> Actions -> Variables."
+            exit 1
+          fi
+
+      - name: Azure login
+        uses: azure/login@1384c340ab2dda50fed2bee3041d1d87018aa5e8 # v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: 1.8.5
+
+      - name: Terraform init
+        working-directory: terraform/environments/dev
+        run: |
+          terraform init -reconfigure
+
+      - name: Terraform drift plan
+        id: drift_plan
+        shell: bash
+        working-directory: terraform/environments/dev
+        run: |
+          set +e
+          terraform plan -detailed-exitcode -no-color -out=tfplan > tfplan.log 2>&1
+          exit_code=$?
+          set -e
+
+          case "$exit_code" in
+            0)
+              echo "drift_detected=false" >> "$GITHUB_OUTPUT"
+              echo "No drift detected."
+              ;;
+            2)
+              terraform show -no-color tfplan > tfplan.txt
+              echo "drift_detected=true" >> "$GITHUB_OUTPUT"
+              echo "Drift detected."
+              ;;
+            *)
+              echo "::error::terraform plan failed with exit code $exit_code"
+              cat tfplan.log
+              exit "$exit_code"
+              ;;
+          esac
+
+      - name: Upload drift plan artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: terraform-drift-dev
+          path: |
+            terraform/environments/dev/tfplan.log
+            terraform/environments/dev/tfplan.txt
+
+      - name: Fail when drift is detected
+        if: steps.drift_plan.outputs.drift_detected == 'true'
+        run: |
+          echo "::error::Terraform drift detected in terraform/environments/dev. Review artifact terraform-drift-dev."
+          exit 1

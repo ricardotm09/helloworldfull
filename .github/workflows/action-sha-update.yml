@@ -25,6 +25,7 @@ jobs:
           files=(
             ".github/workflows/deploy.yml"
             ".github/workflows/pr-validation.yml"
+            ".github/workflows/terraform-drift-detection.yml"
           )
 
           while IFS= read -r line; do
@@ -80,7 +81,7 @@ jobs:
             Automated monthly update of pinned GitHub Action SHAs.
 
             - Source tags remain pinned by major version comments (for example: # v4)
-            - Workflow files updated: deploy and PR validation
+            - Workflow files updated: deploy, PR validation, and drift detection
           branch: chore/rotate-action-shas
           delete-branch: true
           labels: ci,security,dependencies

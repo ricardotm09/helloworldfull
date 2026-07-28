@@ -27,6 +27,24 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
+      - name: Set up Conftest (official binary + checksum)
+        shell: bash
+        run: |
+          set -euo pipefail
+          CONFTEST_VERSION="0.56.0"
+          CONFTEST_TARBALL="conftest_${CONFTEST_VERSION}_Linux_x86_64.tar.gz"
+          CONFTEST_SHA256="620f41640d63bbde1646a108ce2816ba54c980466ceebb7e754dda2d508e8cd5"
+
+          curl -fsSLO "https://github.com/open-policy-agent/conftest/releases/download/v${CONFTEST_VERSION}/${CONFTEST_TARBALL}"
+          echo "${CONFTEST_SHA256}  ${CONFTEST_TARBALL}" | sha256sum -c -
+
+          tar -xzf "${CONFTEST_TARBALL}" conftest
+          sudo install -m 0755 conftest /usr/local/bin/conftest
+
+      - name: Kubernetes policy check (Conftest)
+        run: |
+          conftest test k8s/deployment.yaml --policy policy/kubernetes --namespace main
+
       - name: Validate Azure auth inputs
         run: |
           if [ -z "${{ env.AZURE_CLIENT_ID }}" ] || [ -z "${{ env.AZURE_TENANT_ID }}" ] || [ -z "${{ env.AZURE_SUBSCRIPTION_ID }}" ]; then

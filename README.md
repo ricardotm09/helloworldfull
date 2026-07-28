@@ -133,11 +133,24 @@ This repository includes an automated monthly updater workflow:
 
 It runs on a monthly schedule and can also be run manually. When newer SHAs are available for the pinned action major tags, it opens a pull request with the updates.
 
+The SHA rotation scope includes:
+
+- .github/workflows/deploy.yml
+- .github/workflows/pr-validation.yml
+- .github/workflows/terraform-drift-detection.yml
+
 ## Security gates added
 - PR validation includes a tfsec scan that fails on HIGH severity Terraform findings.
+- PR validation installs Conftest from the official GitHub release and verifies SHA256 before running policy checks.
+- PR validation includes Conftest policy checks for Kubernetes manifests under `policy/kubernetes`.
 - PR and deploy workflows publish SARIF scan findings to the GitHub Security tab.
 - Deploy workflow builds and pushes the image, then constructs an immutable digest reference.
 - Deploy workflow generates an SBOM for the digest-pinned image and uploads it as an artifact.
 - Deploy workflow runs Trivy against the pushed image and fails on HIGH or CRITICAL vulnerabilities.
 - AKS deployment is blocked unless the image reference is digest-pinned (`@sha256:...`).
+
+## Drift detection
+- .github/workflows/terraform-drift-detection.yml runs nightly and on demand.
+- It executes `terraform plan -detailed-exitcode` in `terraform/environments/dev`.
+- Exit code `2` (drift detected) fails the workflow and uploads `terraform-drift-dev` artifacts for review.
     
