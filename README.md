@@ -13,6 +13,8 @@ docker build -t click-counter-app .
 Run:
 docker run -p 3000:3000 click-counter-app
 
+The container starts the app with `node server.js` and only includes runtime artifacts (`server.js`, `index.html`, and production `node_modules`) to keep the deploy image minimal.
+
 ## For AKS practice
 Once the container runs locally, you can push it to a container registry and deploy it to AKS.
 
