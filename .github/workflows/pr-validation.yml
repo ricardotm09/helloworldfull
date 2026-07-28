@@ -60,6 +60,12 @@ jobs:
         run: |
           terraform validate
 
+      - name: Terraform security scan (tfsec)
+        uses: aquasecurity/tfsec-action@b466648d6e39e7c75324f25d83891162a721f2d6 # v1.0.3
+        with:
+          working_directory: terraform/environments/dev
+          additional_args: --minimum-severity HIGH
+
       - name: Terraform plan
         working-directory: terraform/environments/dev
         run: |

@@ -132,3 +132,11 @@ This repository includes an automated monthly updater workflow:
 - .github/workflows/action-sha-update.yml
 
 It runs on a monthly schedule and can also be run manually. When newer SHAs are available for the pinned action major tags, it opens a pull request with the updates.
+
+## Security gates added
+- PR validation includes a tfsec scan that fails on HIGH severity Terraform findings.
+- Deploy workflow builds and pushes the image, then constructs an immutable digest reference.
+- Deploy workflow generates an SBOM for the digest-pinned image and uploads it as an artifact.
+- Deploy workflow runs Trivy against the pushed image and fails on HIGH or CRITICAL vulnerabilities.
+- AKS deployment is blocked unless the image reference is digest-pinned (`@sha256:...`).
+    

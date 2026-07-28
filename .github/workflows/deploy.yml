@@ -131,6 +131,7 @@ jobs:
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Build and push Docker image
+        id: build_image
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
@@ -138,16 +139,57 @@ jobs:
           tags: |
             ${{ steps.deploy_targets.outputs.acr_login_server }}/click-counter:${{ env.IMAGE_TAG }}
 
+      - name: Build immutable image reference
+        id: image_ref
+        run: |
+          digest="${{ steps.build_image.outputs.digest }}"
+          if [ -z "$digest" ] || ! echo "$digest" | grep -Eq '^sha256:[0-9a-f]{64}$'; then
+            echo "::error::Docker build did not return a valid image digest."
+            exit 1
+          fi
+
+          image_name="${{ steps.deploy_targets.outputs.acr_login_server }}/click-counter@$digest"
+          echo "image_name=$image_name" >> "$GITHUB_OUTPUT"
+
+      - name: Generate SBOM for image
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ steps.image_ref.outputs.image_name }}
+          format: cyclonedx
+          output: sbom.cdx.json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sbom-dev
+          path: sbom.cdx.json
+
+      - name: Scan container image (Trivy)
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ steps.image_ref.outputs.image_name }}
+          format: table
+          exit-code: '1'
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+
       - name: Set AKS context
         run: |
           az aks get-credentials --resource-group "${{ steps.deploy_targets.outputs.resource_group_name }}" --name "${{ steps.deploy_targets.outputs.aks_name }}" --overwrite-existing
 
       - name: Deploy to AKS
         run: |
+          if ! echo "${{ steps.image_ref.outputs.image_name }}" | grep -Eq '@sha256:[0-9a-f]{64}$'; then
+            echo "::error::Refusing deployment because image is not digest-pinned."
+            exit 1
+          fi
+
           envsubst < k8s/deployment.yaml | kubectl apply -f -
           kubectl rollout status deployment/click-counter -n "${{ env.K8S_NAMESPACE }}" --timeout=180s
         env:
-          IMAGE_NAME: ${{ steps.deploy_targets.outputs.acr_login_server }}/click-counter:${{ env.IMAGE_TAG }}
+          IMAGE_NAME: ${{ steps.image_ref.outputs.image_name }}
 
       - name: Resolve service endpoint
         id: service_endpoint
