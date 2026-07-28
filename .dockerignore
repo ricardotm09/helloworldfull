@@ -4,3 +4,8 @@ Dockerfile*
 docker-compose*
 .git
 .gitignore
+.github
+terraform
+k8s
+README.md
+*.md

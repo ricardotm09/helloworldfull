@@ -135,6 +135,7 @@ It runs on a monthly schedule and can also be run manually. When newer SHAs are 
 
 ## Security gates added
 - PR validation includes a tfsec scan that fails on HIGH severity Terraform findings.
+- PR and deploy workflows publish SARIF scan findings to the GitHub Security tab.
 - Deploy workflow builds and pushes the image, then constructs an immutable digest reference.
 - Deploy workflow generates an SBOM for the digest-pinned image and uploads it as an artifact.
 - Deploy workflow runs Trivy against the pushed image and fails on HIGH or CRITICAL vulnerabilities.

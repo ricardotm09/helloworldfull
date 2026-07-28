@@ -13,6 +13,7 @@ concurrency:
 permissions:
   id-token: write
   contents: read
+  security-events: write
 
 env:
   AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
@@ -170,10 +171,17 @@ jobs:
         with:
           scan-type: image
           image-ref: ${{ steps.image_ref.outputs.image_name }}
-          format: table
+          format: sarif
+          output: trivy-results.sarif
           exit-code: '1'
           severity: HIGH,CRITICAL
           ignore-unfixed: true
+
+      - name: Upload Trivy scan results to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@adfda868f108ac4222129de456ea554034a27db7 # v4
+        with:
+          sarif_file: trivy-results.sarif
 
       - name: Set AKS context
         run: |
