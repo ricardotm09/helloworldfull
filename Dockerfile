@@ -4,6 +4,7 @@ WORKDIR /app
 
 COPY package*.json ./
 RUN npm install --omit=dev
+RUN mkdir -p /app/node_modules
 
 COPY server.js index.html ./
 
