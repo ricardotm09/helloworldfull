@@ -145,6 +145,9 @@ The SHA rotation scope includes:
 - PR validation includes Conftest policy checks for Kubernetes manifests under `policy/kubernetes`.
 - PR and deploy workflows publish SARIF scan findings to the GitHub Security tab.
 - Deploy workflow builds and pushes the image, then constructs an immutable digest reference.
+- Deploy workflow signs the digest-pinned image with Cosign keyless signing (GitHub OIDC identity).
+- Deploy workflow verifies the Cosign signature and issuer identity before AKS deployment, pinned to `.github/workflows/deploy.yml@refs/heads/main`.
+- Deploy workflow ensures Kyverno is installed on AKS and applies a ClusterPolicy that admits `click-counter` Pods only when image signatures come from `.github/workflows/deploy.yml@refs/heads/main` via GitHub OIDC issuer.
 - Deploy workflow generates an SBOM for the digest-pinned image and uploads it as an artifact.
 - Deploy workflow runs Trivy against the pushed image and fails on HIGH or CRITICAL vulnerabilities.
 - AKS deployment is blocked unless the image reference is digest-pinned (`@sha256:...`).

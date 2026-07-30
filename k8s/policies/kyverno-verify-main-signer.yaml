@@ -1,0 +1,29 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/kyverno/kyverno/main/config/crds/kyverno/kyverno.io_clusterpolicies.yaml
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: enforce-click-counter-main-workflow-signature
+spec:
+  validationFailureAction: Enforce
+  background: false
+  webhookTimeoutSeconds: 30
+  rules:
+    - name: verify-click-counter-image-signature
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      verifyImages:
+        - imageReferences:
+            - "${IMAGE_REPO}@*"
+          required: true
+          verifyDigest: true
+          mutateDigest: false
+          attestors:
+            - entries:
+                - keyless:
+                    subject: "${COSIGN_IDENTITY}"
+                    issuer: https://token.actions.githubusercontent.com
+                    rekor:
+                      url: https://rekor.sigstore.dev
