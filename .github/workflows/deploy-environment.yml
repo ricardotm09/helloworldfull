@@ -85,7 +85,8 @@ jobs:
 
       - name: Log in to Azure Container Registry
         run: |
-          acr_name="${{ inputs.acr_login_server%%.* }}"
+          acr_login_server="${{ inputs.acr_login_server }}"
+          acr_name="${acr_login_server%%.*}"
           az acr login --name "$acr_name"
 
       - name: Set up Cosign (official binary + checksum)
