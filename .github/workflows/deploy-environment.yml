@@ -71,7 +71,7 @@ jobs:
             echo "Kyverno already installed."
           else
             # Use server-side apply to avoid oversized client-side last-applied annotations on large CRDs.
-            kubectl apply --server-side --force-conflicts -f "https://github.com/kyverno/kyverno/releases/download/${KYVERNO_VERSION}/install.yaml"
+            kubectl apply --server-side -f "https://github.com/kyverno/kyverno/releases/download/${KYVERNO_VERSION}/install.yaml"
           fi
 
           kubectl rollout status deployment/kyverno-admission-controller -n kyverno --timeout=180s
@@ -82,6 +82,11 @@ jobs:
           COSIGN_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/deploy.yml@refs/heads/main
         run: |
           envsubst < k8s/policies/kyverno-verify-main-signer.yaml | kubectl apply -f -
+
+      - name: Log in to Azure Container Registry
+        run: |
+          acr_name="${{ inputs.acr_login_server%%.* }}"
+          az acr login --name "$acr_name"
 
       - name: Set up Cosign (official binary + checksum)
         shell: bash

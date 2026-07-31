@@ -82,7 +82,7 @@ jobs:
             Automated monthly update of pinned GitHub Action SHAs.
 
             - Source tags remain pinned by major version comments (for example: # v4)
-            - Workflow files updated: deploy, PR validation, and drift detection
+            - Workflow files updated: deploy, reusable deploy, PR validation, and drift detection
           branch: chore/rotate-action-shas
           delete-branch: true
           labels: ci,security,dependencies

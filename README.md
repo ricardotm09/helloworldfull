@@ -136,6 +136,7 @@ It runs on a monthly schedule and can also be run manually. When newer SHAs are 
 The SHA rotation scope includes:
 
 - .github/workflows/deploy.yml
+- .github/workflows/deploy-environment.yml
 - .github/workflows/pr-validation.yml
 - .github/workflows/terraform-drift-detection.yml
 
@@ -143,6 +144,7 @@ The SHA rotation scope includes:
 - PR validation includes a tfsec scan that fails on HIGH severity Terraform findings.
 - PR validation installs Conftest from the official GitHub release and verifies SHA256 before running policy checks.
 - PR validation includes Conftest policy checks for Kubernetes manifests under `policy/kubernetes`.
+- PR validation includes dependency vulnerability scanning (Trivy filesystem) and fails on HIGH/CRITICAL findings.
 - PR and deploy workflows publish SARIF scan findings to the GitHub Security tab.
 - Deploy workflow builds and pushes the image, then constructs an immutable digest reference.
 - Deploy workflow signs the digest-pinned image with Cosign keyless signing (GitHub OIDC identity).
