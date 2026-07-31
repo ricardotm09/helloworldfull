@@ -169,4 +169,10 @@ The SHA rotation scope includes:
 - On rollout health or smoke-test failure, deployment is automatically rolled back (`kubectl rollout undo`) and the job fails.
 - Configure GitHub Environments `dev`, `stage`, and `prod` with required reviewers to enforce promotion approvals.
 - Each deploy stage uses its own namespace (`dev`, `stage`, `prod`) and per-environment concurrency group.
+
+## Kyverno bootstrap runbook
+- `deploy.yml` calls `.github/workflows/kyverno-bootstrap.yml` automatically before environment deployments.
+- You can still run `.github/workflows/kyverno-bootstrap.yml` manually after cluster provisioning or for break-glass recovery.
+- This workflow installs Kyverno, creates/refreshes `kyverno-acr-regcred`, and applies the signature verification ClusterPolicy.
+- Reusable app deploy workflow (`deploy-environment.yml`) validates Kyverno prerequisites and focuses only on deployment operations.
     

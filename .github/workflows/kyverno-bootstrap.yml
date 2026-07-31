@@ -1,0 +1,114 @@
+name: Bootstrap Kyverno Policy Runtime
+
+on:
+  workflow_call:
+    inputs:
+      acr_login_server:
+        required: true
+        type: string
+      resource_group_name:
+        required: true
+        type: string
+      aks_name:
+        required: true
+        type: string
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+  AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+  AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  ARM_USE_OIDC: true
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Validate Azure auth inputs
+        run: |
+          if [ -z "${{ env.AZURE_CLIENT_ID }}" ] || [ -z "${{ env.AZURE_TENANT_ID }}" ] || [ -z "${{ env.AZURE_SUBSCRIPTION_ID }}" ]; then
+            echo "::error::Missing AZURE_CLIENT_ID, AZURE_TENANT_ID, or AZURE_SUBSCRIPTION_ID. Set them in Repository Settings -> Secrets and variables -> Actions -> Variables."
+            exit 1
+          fi
+
+      - name: Azure login
+        uses: azure/login@1384c340ab2dda50fed2bee3041d1d87018aa5e8 # v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Set up Terraform
+        if: github.event_name == 'workflow_dispatch'
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: 1.8.5
+
+      - name: Terraform init
+        if: github.event_name == 'workflow_dispatch'
+        working-directory: terraform/environments/dev
+        run: |
+          terraform init -reconfigure
+
+      - name: Resolve deployment targets
+        id: targets
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_call" ]; then
+            echo "acr_login_server=${{ inputs.acr_login_server }}" >> "$GITHUB_OUTPUT"
+            echo "resource_group_name=${{ inputs.resource_group_name }}" >> "$GITHUB_OUTPUT"
+            echo "aks_name=${{ inputs.aks_name }}" >> "$GITHUB_OUTPUT"
+          else
+            cd terraform/environments/dev
+            echo "acr_login_server=$(terraform output -raw acr_login_server)" >> "$GITHUB_OUTPUT"
+            echo "resource_group_name=$(terraform output -raw resource_group_name)" >> "$GITHUB_OUTPUT"
+            echo "aks_name=$(terraform output -raw aks_name)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set AKS context
+        run: |
+          az aks get-credentials --resource-group "${{ steps.targets.outputs.resource_group_name }}" --name "${{ steps.targets.outputs.aks_name }}" --overwrite-existing
+
+      - name: Install Kyverno (server-side apply)
+        shell: bash
+        run: |
+          set -euo pipefail
+          KYVERNO_VERSION="v1.15.2"
+
+          kubectl apply --server-side -f "https://github.com/kyverno/kyverno/releases/download/${KYVERNO_VERSION}/install.yaml"
+          kubectl rollout status deployment/kyverno-admission-controller -n kyverno --timeout=180s
+
+      - name: Prepare Kyverno ACR credentials
+        run: |
+          acr_login_server="${{ steps.targets.outputs.acr_login_server }}"
+          acr_name="${acr_login_server%%.*}"
+          acr_token="$(az acr login --name "$acr_name" --expose-token --query accessToken -o tsv)"
+
+          kubectl create secret docker-registry kyverno-acr-regcred \
+            --namespace kyverno \
+            --docker-server "$acr_login_server" \
+            --docker-username "00000000-0000-0000-0000-000000000000" \
+            --docker-password "$acr_token" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Apply signature verification policy
+        env:
+          IMAGE_REPO: ${{ steps.targets.outputs.acr_login_server }}/click-counter
+          COSIGN_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/deploy.yml@refs/heads/main
+        run: |
+          envsubst < k8s/policies/kyverno-verify-main-signer.yaml | kubectl apply -f -
+
+      - name: Verify policy resources
+        run: |
+          kubectl get clusterpolicy enforce-click-counter-main-workflow-signature
+          kubectl -n kyverno get secret kyverno-acr-regcred

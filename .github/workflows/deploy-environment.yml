@@ -61,20 +61,10 @@ jobs:
         run: |
           kubectl get namespace "${{ env.K8S_NAMESPACE }}" >/dev/null 2>&1 || kubectl create namespace "${{ env.K8S_NAMESPACE }}"
 
-      - name: Ensure Kyverno admission controller
-        shell: bash
+      - name: Validate Kyverno prerequisites
         run: |
-          set -euo pipefail
-          KYVERNO_VERSION="v1.15.2"
-
-          if kubectl get deployment kyverno-admission-controller -n kyverno >/dev/null 2>&1; then
-            echo "Kyverno already installed."
-          else
-            # Use server-side apply to avoid oversized client-side last-applied annotations on large CRDs.
-            kubectl apply --server-side -f "https://github.com/kyverno/kyverno/releases/download/${KYVERNO_VERSION}/install.yaml"
-          fi
-
-          kubectl rollout status deployment/kyverno-admission-controller -n kyverno --timeout=180s
+          kubectl get deployment kyverno-admission-controller -n kyverno >/dev/null
+          kubectl get crd clusterpolicies.kyverno.io >/dev/null
 
       - name: Prepare ACR access for Kyverno and verification
         run: |
@@ -92,6 +82,9 @@ jobs:
             --docker-username "00000000-0000-0000-0000-000000000000" \
             --docker-password "$acr_token" \
             --dry-run=client -o yaml | kubectl apply -f -
+
+          # Give Kyverno a brief moment to observe refreshed registry credentials.
+          sleep 10
 
       - name: Apply cluster signature policy (Kyverno)
         env:

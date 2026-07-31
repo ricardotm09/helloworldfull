@@ -241,8 +241,16 @@ jobs:
             --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
             "${{ steps.image_ref.outputs.image_name }}"
 
+  kyverno-bootstrap:
+    needs: terraform-apply
+    uses: ./.github/workflows/kyverno-bootstrap.yml
+    with:
+      acr_login_server: ${{ needs.terraform-apply.outputs.acr_login_server }}
+      resource_group_name: ${{ needs.terraform-apply.outputs.resource_group_name }}
+      aks_name: ${{ needs.terraform-apply.outputs.aks_name }}
+
   deploy-dev:
-    needs: [terraform-apply, build-and-sign]
+    needs: [terraform-apply, build-and-sign, kyverno-bootstrap]
     uses: ./.github/workflows/deploy-environment.yml
     with:
       environment_name: dev
