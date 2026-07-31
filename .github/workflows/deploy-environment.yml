@@ -76,12 +76,14 @@ jobs:
           az acr login --name "$acr_name"
 
           # Required for Kyverno admission webhook to pull signatures from private ACR.
-          acr_token="$(az acr login --name "$acr_name" --expose-token --query accessToken -o tsv)"
+          # acr_token="$(az acr login --name "$acr_name" --expose-token --query accessToken -o tsv)"
+          acr_password=$(az acr credential show --name "$acr_name" --query "passwords[0].value" -o tsv)
           kubectl create secret docker-registry kyverno-acr-regcred \
             --namespace "kyverno" \
             --docker-server "$acr_login_server" \
-            --docker-username "00000000-0000-0000-0000-000000000000" \
-            --docker-password "$acr_token" \
+            # --docker-username "00000000-0000-0000-0000-000000000000" \
+            --docker-username "$acr_name" \
+            --docker-password "$acr_password" \
             --dry-run=client -o yaml | kubectl apply -f -
 
           # Give Kyverno a brief moment to observe refreshed registry credentials.
