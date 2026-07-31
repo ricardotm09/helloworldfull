@@ -89,19 +89,6 @@ jobs:
           kubectl apply --server-side -f "https://github.com/kyverno/kyverno/releases/download/${KYVERNO_VERSION}/install.yaml"
           kubectl rollout status deployment/kyverno-admission-controller -n kyverno --timeout=180s
 
-      - name: Prepare Kyverno ACR credentials
-        run: |
-          acr_login_server="${{ steps.targets.outputs.acr_login_server }}"
-          acr_name="${acr_login_server%%.*}"
-          acr_token="$(az acr login --name "$acr_name" --expose-token --query accessToken -o tsv)"
-
-          kubectl create secret docker-registry kyverno-acr-regcred \
-            --namespace kyverno \
-            --docker-server "$acr_login_server" \
-            --docker-username "00000000-0000-0000-0000-000000000000" \
-            --docker-password "$acr_token" \
-            --dry-run=client -o yaml | kubectl apply -f -
-
       - name: Apply signature verification policy
         env:
           IMAGE_REPO: ${{ steps.targets.outputs.acr_login_server }}/click-counter
@@ -112,4 +99,3 @@ jobs:
       - name: Verify policy resources
         run: |
           kubectl get clusterpolicy enforce-click-counter-main-workflow-signature
-          kubectl -n kyverno get secret kyverno-acr-regcred
