@@ -2,6 +2,16 @@ name: Bootstrap Kyverno Policy Runtime
 
 on:
   workflow_call:
+    inputs:
+      acr_login_server:
+        required: false
+        type: string
+      resource_group_name:
+        required: false
+        type: string
+      aks_name:
+        required: false
+        type: string
   workflow_dispatch:
 
 permissions:
@@ -40,11 +50,13 @@ jobs:
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
       - name: Set up Terraform
+        if: ${{ inputs.acr_login_server == '' || inputs.resource_group_name == '' || inputs.aks_name == '' }}
         uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
         with:
           terraform_version: 1.8.5
 
       - name: Terraform init
+        if: ${{ inputs.acr_login_server == '' || inputs.resource_group_name == '' || inputs.aks_name == '' }}
         working-directory: terraform/environments/dev
         run: |
           terraform init -reconfigure
@@ -53,9 +65,15 @@ jobs:
         id: targets
         working-directory: terraform/environments/dev
         run: |
-          echo "acr_login_server=$(terraform output -raw acr_login_server)" >> "$GITHUB_OUTPUT"
-          echo "resource_group_name=$(terraform output -raw resource_group_name)" >> "$GITHUB_OUTPUT"
-          echo "aks_name=$(terraform output -raw aks_name)" >> "$GITHUB_OUTPUT"
+          if [ -n "${{ inputs.acr_login_server }}" ] && [ -n "${{ inputs.resource_group_name }}" ] && [ -n "${{ inputs.aks_name }}" ]; then
+            echo "acr_login_server=${{ inputs.acr_login_server }}" >> "$GITHUB_OUTPUT"
+            echo "resource_group_name=${{ inputs.resource_group_name }}" >> "$GITHUB_OUTPUT"
+            echo "aks_name=${{ inputs.aks_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "acr_login_server=$(terraform output -raw acr_login_server)" >> "$GITHUB_OUTPUT"
+            echo "resource_group_name=$(terraform output -raw resource_group_name)" >> "$GITHUB_OUTPUT"
+            echo "aks_name=$(terraform output -raw aks_name)" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Set AKS context
         run: |
