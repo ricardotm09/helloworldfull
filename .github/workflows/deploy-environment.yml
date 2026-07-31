@@ -55,6 +55,7 @@ jobs:
 
       - name: Set AKS context
         run: |
+          az extension remove --name aks-preview >/dev/null 2>&1 || true
           az aks get-credentials --resource-group "${{ inputs.resource_group_name }}" --name "${{ inputs.aks_name }}" --overwrite-existing
 
       - name: Ensure target namespace exists
