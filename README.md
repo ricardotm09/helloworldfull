@@ -156,4 +156,14 @@ The SHA rotation scope includes:
 - .github/workflows/terraform-drift-detection.yml runs nightly and on demand.
 - It executes `terraform plan -detailed-exitcode` in `terraform/environments/dev`.
 - Exit code `2` (drift detected) fails the workflow and uploads `terraform-drift-dev` artifacts for review.
+
+## Multi-environment promotion (build once)
+- `.github/workflows/deploy.yml` is split into staged jobs: `terraform-plan` -> `terraform-apply` -> `build-and-sign` -> `deploy-dev` -> `deploy-stage` -> `deploy-prod`.
+- Container build, scanning, SBOM generation, and signing run once in `build-and-sign`.
+- The immutable digest reference is published as an artifact (`image-release`) and promoted unchanged across environments.
+- `deploy-dev`, `deploy-stage`, and `deploy-prod` call reusable workflow `.github/workflows/deploy-environment.yml` to keep deployment logic centralized.
+- Each environment deployment verifies the signature again before cluster apply.
+- On rollout health or smoke-test failure, deployment is automatically rolled back (`kubectl rollout undo`) and the job fails.
+- Configure GitHub Environments `dev`, `stage`, and `prod` with required reviewers to enforce promotion approvals.
+- Each deploy stage uses its own namespace (`dev`, `stage`, `prod`) and per-environment concurrency group.
     

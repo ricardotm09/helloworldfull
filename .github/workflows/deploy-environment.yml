@@ -1,0 +1,169 @@
+name: Deploy Environment (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      environment_name:
+        required: true
+        type: string
+      k8s_namespace:
+        required: true
+        type: string
+      resource_group_name:
+        required: true
+        type: string
+      aks_name:
+        required: true
+        type: string
+      acr_login_server:
+        required: true
+        type: string
+      image_name:
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+  AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+  AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment_name }}
+    concurrency:
+      group: aks-deploy-${{ inputs.environment_name }}
+      cancel-in-progress: false
+    env:
+      K8S_NAMESPACE: ${{ inputs.k8s_namespace }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Azure login
+        uses: azure/login@1384c340ab2dda50fed2bee3041d1d87018aa5e8 # v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Set AKS context
+        run: |
+          az aks get-credentials --resource-group "${{ inputs.resource_group_name }}" --name "${{ inputs.aks_name }}" --overwrite-existing
+
+      - name: Ensure target namespace exists
+        run: |
+          kubectl get namespace "${{ env.K8S_NAMESPACE }}" >/dev/null 2>&1 || kubectl create namespace "${{ env.K8S_NAMESPACE }}"
+
+      - name: Ensure Kyverno admission controller
+        shell: bash
+        run: |
+          set -euo pipefail
+          KYVERNO_VERSION="v1.15.2"
+
+          if kubectl get deployment kyverno-admission-controller -n kyverno >/dev/null 2>&1; then
+            echo "Kyverno already installed."
+          else
+            # Use server-side apply to avoid oversized client-side last-applied annotations on large CRDs.
+            kubectl apply --server-side --force-conflicts -f "https://github.com/kyverno/kyverno/releases/download/${KYVERNO_VERSION}/install.yaml"
+          fi
+
+          kubectl rollout status deployment/kyverno-admission-controller -n kyverno --timeout=180s
+
+      - name: Apply cluster signature policy (Kyverno)
+        env:
+          IMAGE_REPO: ${{ inputs.acr_login_server }}/click-counter
+          COSIGN_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/deploy.yml@refs/heads/main
+        run: |
+          envsubst < k8s/policies/kyverno-verify-main-signer.yaml | kubectl apply -f -
+
+      - name: Set up Cosign (official binary + checksum)
+        shell: bash
+        run: |
+          set -euo pipefail
+          COSIGN_VERSION="3.1.2"
+          COSIGN_BINARY="cosign-linux-amd64"
+          COSIGN_SHA256="f7622ed3cf22e55e1ae6377c080979ff77a22da9981c11df222a2e444991e7cf"
+
+          curl -fsSLO "https://github.com/sigstore/cosign/releases/download/v${COSIGN_VERSION}/${COSIGN_BINARY}"
+          echo "${COSIGN_SHA256}  ${COSIGN_BINARY}" | sha256sum -c -
+
+          chmod +x "${COSIGN_BINARY}"
+          sudo install -m 0755 "${COSIGN_BINARY}" /usr/local/bin/cosign
+
+      - name: Verify promoted image signature (Cosign keyless)
+        run: |
+          expected_identity="https://github.com/${{ github.repository }}/.github/workflows/deploy.yml@refs/heads/main"
+
+          cosign verify \
+            --certificate-identity "$expected_identity" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "${{ inputs.image_name }}"
+
+      - name: Apply manifest
+        run: |
+          if ! echo "${{ inputs.image_name }}" | grep -Eq '@sha256:[0-9a-f]{64}$'; then
+            echo "::error::Refusing deployment because image is not digest-pinned."
+            exit 1
+          fi
+
+          envsubst < k8s/deployment.yaml | kubectl apply -n "${{ env.K8S_NAMESPACE }}" -f -
+        env:
+          IMAGE_NAME: ${{ inputs.image_name }}
+
+      - name: Check rollout health
+        id: rollout
+        continue-on-error: true
+        run: |
+          kubectl rollout status deployment/click-counter -n "${{ env.K8S_NAMESPACE }}" --timeout=180s
+
+      - name: Resolve service endpoint
+        id: service_endpoint
+        if: steps.rollout.outcome == 'success'
+        continue-on-error: true
+        run: |
+          for attempt in $(seq 1 20); do
+            service_ip=$(kubectl get svc click-counter -n "${{ env.K8S_NAMESPACE }}" -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+            service_hostname=$(kubectl get svc click-counter -n "${{ env.K8S_NAMESPACE }}" -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+
+            if [ -n "$service_ip" ]; then
+              echo "url=http://$service_ip" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+
+            if [ -n "$service_hostname" ]; then
+              echo "url=http://$service_hostname" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+
+            echo "Waiting for LoadBalancer endpoint... attempt $attempt/20"
+            sleep 15
+          done
+
+          echo "::error::Timed out waiting for the AKS service external endpoint."
+          exit 1
+
+      - name: Smoke test deployment
+        id: smoke
+        if: steps.service_endpoint.outcome == 'success'
+        continue-on-error: true
+        run: |
+          curl --fail --silent --show-error "${{ steps.service_endpoint.outputs.url }}/health/ready"
+
+      - name: Roll back deployment
+        if: steps.rollout.outcome == 'failure' || steps.service_endpoint.outcome == 'failure' || steps.smoke.outcome == 'failure'
+        run: |
+          kubectl rollout undo deployment/click-counter -n "${{ env.K8S_NAMESPACE }}"
+          kubectl rollout status deployment/click-counter -n "${{ env.K8S_NAMESPACE }}" --timeout=180s
+
+      - name: Fail after rollback
+        if: steps.rollout.outcome == 'failure' || steps.service_endpoint.outcome == 'failure' || steps.smoke.outcome == 'failure'
+        run: |
+          echo "::error::Deployment failed health checks and was rolled back in namespace ${{ env.K8S_NAMESPACE }}."
+          exit 1

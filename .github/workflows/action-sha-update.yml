@@ -24,6 +24,7 @@ jobs:
 
           files=(
             ".github/workflows/deploy.yml"
+            ".github/workflows/deploy-environment.yml"
             ".github/workflows/pr-validation.yml"
             ".github/workflows/terraform-drift-detection.yml"
           )
