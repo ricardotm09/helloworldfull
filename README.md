@@ -150,6 +150,7 @@ The SHA rotation scope includes:
 - Deploy workflow signs the digest-pinned image with Cosign keyless signing (GitHub OIDC identity).
 - Deploy workflow verifies the Cosign signature and issuer identity before AKS deployment, pinned to `.github/workflows/deploy.yml@refs/heads/main`.
 - Deploy workflow ensures Kyverno is installed on AKS and applies a ClusterPolicy that admits `click-counter` Pods only when image signatures come from `.github/workflows/deploy.yml@refs/heads/main` via GitHub OIDC issuer.
+- Reusable deploy workflow also provisions `kyverno-acr-regcred` in namespace `kyverno` so admission can read signatures from private ACR.
 - Deploy workflow generates an SBOM for the digest-pinned image and uploads it as an artifact.
 - Deploy workflow runs Trivy against the pushed image and fails on HIGH or CRITICAL vulnerabilities.
 - AKS deployment is blocked unless the image reference is digest-pinned (`@sha256:...`).

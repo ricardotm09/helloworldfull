@@ -76,18 +76,29 @@ jobs:
 
           kubectl rollout status deployment/kyverno-admission-controller -n kyverno --timeout=180s
 
+      - name: Prepare ACR access for Kyverno and verification
+        run: |
+          acr_login_server="${{ inputs.acr_login_server }}"
+          acr_name="${acr_login_server%%.*}"
+
+          # Required for cosign verify against private ACR in this job.
+          az acr login --name "$acr_name"
+
+          # Required for Kyverno admission webhook to pull signatures from private ACR.
+          acr_token="$(az acr login --name "$acr_name" --expose-token --query accessToken -o tsv)"
+          kubectl create secret docker-registry kyverno-acr-regcred \
+            --namespace kyverno \
+            --docker-server "$acr_login_server" \
+            --docker-username "00000000-0000-0000-0000-000000000000" \
+            --docker-password "$acr_token" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
       - name: Apply cluster signature policy (Kyverno)
         env:
           IMAGE_REPO: ${{ inputs.acr_login_server }}/click-counter
           COSIGN_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/deploy.yml@refs/heads/main
         run: |
           envsubst < k8s/policies/kyverno-verify-main-signer.yaml | kubectl apply -f -
-
-      - name: Log in to Azure Container Registry
-        run: |
-          acr_login_server="${{ inputs.acr_login_server }}"
-          acr_name="${acr_login_server%%.*}"
-          az acr login --name "$acr_name"
 
       - name: Set up Cosign (official binary + checksum)
         shell: bash

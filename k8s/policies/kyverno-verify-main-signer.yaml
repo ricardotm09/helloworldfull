@@ -17,6 +17,9 @@ spec:
       verifyImages:
         - imageReferences:
             - "${IMAGE_REPO}@*"
+          imageRegistryCredentials:
+            secrets:
+              - kyverno-acr-regcred
           required: true
           verifyDigest: true
           mutateDigest: false
