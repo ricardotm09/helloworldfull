@@ -2,16 +2,6 @@ name: Bootstrap Kyverno Policy Runtime
 
 on:
   workflow_call:
-    inputs:
-      acr_login_server:
-        required: true
-        type: string
-      resource_group_name:
-        required: true
-        type: string
-      aks_name:
-        required: true
-        type: string
   workflow_dispatch:
 
 permissions:
@@ -50,30 +40,22 @@ jobs:
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
       - name: Set up Terraform
-        if: github.event_name == 'workflow_dispatch'
         uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
         with:
           terraform_version: 1.8.5
 
       - name: Terraform init
-        if: github.event_name == 'workflow_dispatch'
         working-directory: terraform/environments/dev
         run: |
           terraform init -reconfigure
 
       - name: Resolve deployment targets
         id: targets
+        working-directory: terraform/environments/dev
         run: |
-          if [ "${{ github.event_name }}" = "workflow_call" ]; then
-            echo "acr_login_server=${{ inputs.acr_login_server }}" >> "$GITHUB_OUTPUT"
-            echo "resource_group_name=${{ inputs.resource_group_name }}" >> "$GITHUB_OUTPUT"
-            echo "aks_name=${{ inputs.aks_name }}" >> "$GITHUB_OUTPUT"
-          else
-            cd terraform/environments/dev
-            echo "acr_login_server=$(terraform output -raw acr_login_server)" >> "$GITHUB_OUTPUT"
-            echo "resource_group_name=$(terraform output -raw resource_group_name)" >> "$GITHUB_OUTPUT"
-            echo "aks_name=$(terraform output -raw aks_name)" >> "$GITHUB_OUTPUT"
-          fi
+          echo "acr_login_server=$(terraform output -raw acr_login_server)" >> "$GITHUB_OUTPUT"
+          echo "resource_group_name=$(terraform output -raw resource_group_name)" >> "$GITHUB_OUTPUT"
+          echo "aks_name=$(terraform output -raw aks_name)" >> "$GITHUB_OUTPUT"
 
       - name: Set AKS context
         run: |
