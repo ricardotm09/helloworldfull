@@ -81,7 +81,6 @@ jobs:
           kubectl create secret docker-registry kyverno-acr-regcred \
             --namespace "kyverno" \
             --docker-server "$acr_login_server" \
-            # --docker-username "00000000-0000-0000-0000-000000000000" \
             --docker-username "$acr_name" \
             --docker-password "$acr_password" \
             --dry-run=client -o yaml | kubectl apply -f -
