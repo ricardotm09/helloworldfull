@@ -214,19 +214,22 @@ jobs:
         with:
           sarif_file: trivy-results.sarif
 
-      - name: Set up Cosign (official binary + checksum)
-        shell: bash
-        run: |
-          set -euo pipefail
-          COSIGN_VERSION="3.1.2"
-          COSIGN_BINARY="cosign-linux-amd64"
-          COSIGN_SHA256="f7622ed3cf22e55e1ae6377c080979ff77a22da9981c11df222a2e444991e7cf"
+      # - name: Set up Cosign (official binary + checksum)
+      #   shell: bash
+      #   run: |
+      #     set -euo pipefail
+      #     COSIGN_VERSION="3.1.2"
+      #     COSIGN_BINARY="cosign-linux-amd64"
+      #     COSIGN_SHA256="f7622ed3cf22e55e1ae6377c080979ff77a22da9981c11df222a2e444991e7cf"
 
-          curl -fsSLO "https://github.com/sigstore/cosign/releases/download/v${COSIGN_VERSION}/${COSIGN_BINARY}"
-          echo "${COSIGN_SHA256}  ${COSIGN_BINARY}" | sha256sum -c -
+      #     curl -fsSLO "https://github.com/sigstore/cosign/releases/download/v${COSIGN_VERSION}/${COSIGN_BINARY}"
+      #     echo "${COSIGN_SHA256}  ${COSIGN_BINARY}" | sha256sum -c -
 
-          chmod +x "${COSIGN_BINARY}"
-          sudo install -m 0755 "${COSIGN_BINARY}" /usr/local/bin/cosign
+      #     chmod +x "${COSIGN_BINARY}"
+      #     sudo install -m 0755 "${COSIGN_BINARY}" /usr/local/bin/cosign
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3.8.0
 
       - name: Sign image digest (Cosign keyless)
         run: |

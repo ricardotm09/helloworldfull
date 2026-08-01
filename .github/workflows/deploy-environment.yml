@@ -110,8 +110,6 @@ jobs:
       #     sudo install -m 0755 "${COSIGN_BINARY}" /usr/local/bin/cosign
       - name: Install Cosign
         uses: sigstore/cosign-installer@v3.8.0
-        with:
-          cosign-release: 'v3.1.2'
 
       - name: Verify promoted image signature (Cosign keyless)
         run: |
