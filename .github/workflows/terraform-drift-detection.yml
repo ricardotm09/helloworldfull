@@ -63,16 +63,34 @@ jobs:
           case "$exit_code" in
             0)
               echo "drift_detected=false" >> "$GITHUB_OUTPUT"
+              echo "DRIFT_STATUS=clean" >> "$GITHUB_ENV"
               echo "No drift detected."
+              {
+                echo "## Terraform Drift Check"
+                echo "DRIFT_STATUS=clean"
+              } >> "$GITHUB_STEP_SUMMARY"
               ;;
             2)
               terraform show -no-color tfplan > tfplan.txt
               echo "drift_detected=true" >> "$GITHUB_OUTPUT"
-              echo "Drift detected."
+              echo "DRIFT_STATUS=detected" >> "$GITHUB_ENV"
+              echo "::error::Drift detected."
+              {
+                echo "## Terraform Drift Check"
+                echo "DRIFT_STATUS=detected"
+                echo "See artifact: terraform-drift-dev"
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit 2
               ;;
             *)
+              echo "DRIFT_STATUS=error" >> "$GITHUB_ENV"
               echo "::error::terraform plan failed with exit code $exit_code"
               cat tfplan.log
+              {
+                echo "## Terraform Drift Check"
+                echo "DRIFT_STATUS=error"
+                echo "terraform plan failed with exit code $exit_code"
+              } >> "$GITHUB_STEP_SUMMARY"
               exit "$exit_code"
               ;;
           esac
@@ -86,8 +104,3 @@ jobs:
             terraform/environments/dev/tfplan.log
             terraform/environments/dev/tfplan.txt
 
-      - name: Fail when drift is detected
-        if: steps.drift_plan.outputs.drift_detected == 'true'
-        run: |
-          echo "::error::Terraform drift detected in terraform/environments/dev. Review artifact terraform-drift-dev."
-          exit 1
