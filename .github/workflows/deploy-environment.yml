@@ -21,7 +21,6 @@ on:
       image_name:
         required: true
         type: string
-
 permissions:
   id-token: write
   contents: read
@@ -95,19 +94,48 @@ jobs:
         run: |
           envsubst < k8s/policies/kyverno-verify-main-signer.yaml | kubectl apply -f -
 
-      # - name: Set up Cosign (official binary + checksum)
-      #   shell: bash
-      #   run: |
-      #     set -euo pipefail
-      #     COSIGN_VERSION="3.1.2"
-      #     COSIGN_BINARY="cosign-linux-amd64"
-      #     COSIGN_SHA256="f7622ed3cf22e55e1ae6377c080979ff77a22da9981c11df222a2e444991e7cf"
+      - name: Kyverno negative canary (dev only)
+        if: ${{ inputs.environment_name == 'dev' }}
+        shell: bash
+        run: |
+          set -euo pipefail
 
-      #     curl -fsSLO "https://github.com/sigstore/cosign/releases/download/v${COSIGN_VERSION}/${COSIGN_BINARY}"
-      #     echo "${COSIGN_SHA256}  ${COSIGN_BINARY}" | sha256sum -c -
+          canary_image="${{ inputs.acr_login_server }}/click-counter@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          canary_log="/tmp/kyverno-negative-canary.log"
 
-      #     chmod +x "${COSIGN_BINARY}"
-      #     sudo install -m 0755 "${COSIGN_BINARY}" /usr/local/bin/cosign
+          kubectl delete pod kyverno-negative-canary -n "${K8S_NAMESPACE}" --ignore-not-found >/dev/null 2>&1 || true
+
+          cat > /tmp/kyverno-negative-canary.yaml <<EOF
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: kyverno-negative-canary
+          spec:
+            restartPolicy: Never
+            containers:
+              - name: canary
+                image: ${canary_image}
+          EOF
+
+          set +e
+          kubectl apply -n "${K8S_NAMESPACE}" -f /tmp/kyverno-negative-canary.yaml >"${canary_log}" 2>&1
+          canary_exit=$?
+          set -e
+
+          if [ "$canary_exit" -eq 0 ]; then
+            echo "::error::Kyverno negative canary was unexpectedly admitted. Signature enforcement may be bypassed."
+            kubectl delete pod kyverno-negative-canary -n "${K8S_NAMESPACE}" --ignore-not-found >/dev/null 2>&1 || true
+            exit 1
+          fi
+
+          if ! grep -Eiq "enforce-click-counter-main-workflow-signature|failed to verify image|no signatures found" "${canary_log}"; then
+            echo "::error::Kyverno negative canary failed for an unexpected reason."
+            cat "${canary_log}"
+            exit 1
+          fi
+
+          echo "Kyverno negative canary passed: invalid image was denied by signature policy."
+
       - name: Install Cosign
         uses: sigstore/cosign-installer@v3.8.0
 
