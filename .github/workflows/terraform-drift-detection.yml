@@ -44,6 +44,7 @@ jobs:
         uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
         with:
           terraform_version: 1.8.5
+          terraform_wrapper: false
 
       - name: Terraform init
         working-directory: terraform/environments/dev
@@ -62,6 +63,40 @@ jobs:
 
           case "$exit_code" in
             0)
+              plan_line="$(grep -E '^Plan: [0-9]+ to add, [0-9]+ to change, [0-9]+ to destroy\.$' tfplan.log | tail -n 1 || true)"
+              if [ -n "$plan_line" ]; then
+                add_count="$(echo "$plan_line" | awk '{print $2}')"
+                change_count="$(echo "$plan_line" | awk '{print $5}')"
+                destroy_count="$(echo "$plan_line" | awk '{print $8}')"
+
+                if [ "$add_count" -gt 0 ] || [ "$change_count" -gt 0 ] || [ "$destroy_count" -gt 0 ]; then
+                  terraform show -no-color tfplan > tfplan.txt
+                  echo "drift_detected=true" >> "$GITHUB_OUTPUT"
+                  echo "DRIFT_STATUS=detected_from_plan" >> "$GITHUB_ENV"
+                  echo "::error::Actionable Terraform plan detected despite exit code 0: $plan_line"
+                  {
+                    echo "## Terraform Drift Check"
+                    echo "DRIFT_STATUS=detected_from_plan"
+                    echo "$plan_line"
+                    echo "See artifact: terraform-drift-dev"
+                  } >> "$GITHUB_STEP_SUMMARY"
+                  exit 2
+                fi
+              fi
+
+              if grep -Fq "Objects have changed outside of Terraform" tfplan.log; then
+                echo "drift_detected=true" >> "$GITHUB_OUTPUT"
+                echo "DRIFT_STATUS=external_changes" >> "$GITHUB_ENV"
+                echo "::error::External changes detected in tfplan.log despite exit code 0."
+                {
+                  echo "## Terraform Drift Check"
+                  echo "DRIFT_STATUS=external_changes"
+                  echo "Detected note: Objects have changed outside of Terraform"
+                  echo "See artifact: terraform-drift-dev"
+                } >> "$GITHUB_STEP_SUMMARY"
+                exit 2
+              fi
+
               echo "drift_detected=false" >> "$GITHUB_OUTPUT"
               echo "DRIFT_STATUS=clean" >> "$GITHUB_ENV"
               echo "No drift detected."
