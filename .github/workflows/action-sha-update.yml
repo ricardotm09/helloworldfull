@@ -58,6 +58,7 @@ jobs:
           actions/download-artifact@sha v4
           docker/setup-buildx-action@sha v3
           docker/build-push-action@sha v6
+          sigstore/cosign-installer@sha v4.1.2
           aquasecurity/tfsec-action@sha v1.0.3
           aquasecurity/trivy-action@sha v0.36.0
           github/codeql-action/upload-sarif@sha v4
