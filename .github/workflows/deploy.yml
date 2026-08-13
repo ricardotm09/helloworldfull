@@ -37,6 +37,7 @@ jobs:
 
       - name: Validate Azure auth inputs
         run: |
+          # `-z` checks for empty strings; `||` means fail if any required variable is empty.
           if [ -z "${{ env.AZURE_CLIENT_ID }}" ] || [ -z "${{ env.AZURE_TENANT_ID }}" ] || [ -z "${{ env.AZURE_SUBSCRIPTION_ID }}" ]; then
             echo "::error::Missing AZURE_CLIENT_ID, AZURE_TENANT_ID, or AZURE_SUBSCRIPTION_ID. Set them in Repository Settings -> Secrets and variables -> Actions -> Variables."
             exit 1
@@ -57,16 +58,19 @@ jobs:
       - name: Terraform init
         working-directory: terraform/environments/dev
         run: |
+          # Reconfigure backend each run to avoid stale local backend settings.
           terraform init -reconfigure
 
       - name: Terraform plan
         working-directory: terraform/environments/dev
         run: |
+          # Creates a binary plan file used later by apply.
           terraform plan -out=tfplan
 
       - name: Export Terraform plan (human-readable)
         working-directory: terraform/environments/dev
         run: |
+          # `>` overwrites/creates tfplan.txt with a readable plan for artifacts/review.
           terraform show -no-color tfplan > tfplan.txt
 
       - name: Upload Terraform plan artifacts
@@ -116,17 +120,20 @@ jobs:
       - name: Terraform init
         working-directory: terraform/environments/dev
         run: |
+          # Reconfigure backend before apply to ensure runner uses remote state settings.
           terraform init -reconfigure
 
       - name: Terraform apply
         working-directory: terraform/environments/dev
         run: |
+          # Applies the exact reviewed tfplan file to avoid recalculating a different plan.
           terraform apply -auto-approve tfplan
 
       - name: Get deployment targets
         working-directory: terraform/environments/dev
         id: deploy_targets
         run: |
+          # `>> "$GITHUB_OUTPUT"` appends named outputs for downstream jobs.
           echo "acr_name=$(terraform output -raw acr_name)" >> "$GITHUB_OUTPUT"
           echo "acr_login_server=$(terraform output -raw acr_login_server)" >> "$GITHUB_OUTPUT"
           echo "resource_group_name=$(terraform output -raw resource_group_name)" >> "$GITHUB_OUTPUT"
@@ -151,6 +158,7 @@ jobs:
 
       - name: Log in to Azure Container Registry
         run: |
+          # Authenticates docker client to ACR for push/sign/verify operations.
           az acr login --name "${{ needs.terraform-apply.outputs.acr_name }}"
 
       - name: Set up Docker Buildx
@@ -169,16 +177,19 @@ jobs:
         id: image_ref
         run: |
           digest="${{ steps.build_image.outputs.digest }}"
+          # `-z` checks empty value; `grep -Eq` enforces sha256 format; `||` enters failure path.
           if [ -z "$digest" ] || ! echo "$digest" | grep -Eq '^sha256:[0-9a-f]{64}$'; then
             echo "::error::Docker build did not return a valid image digest."
             exit 1
           fi
 
+          # `>> "$GITHUB_OUTPUT"` exports immutable image ref to downstream jobs.
           image_name="${{ needs.terraform-apply.outputs.acr_login_server }}/click-counter@$digest"
           echo "image_name=$image_name" >> "$GITHUB_OUTPUT"
 
       - name: Publish promoted image reference artifact
         run: |
+          # `>` writes the promoted digest reference to a file for artifact handoff.
           mkdir -p release
           echo "${{ steps.image_ref.outputs.image_name }}" > release/image-name.txt
 
@@ -224,10 +235,12 @@ jobs:
 
       - name: Sign image digest (Cosign keyless)
         run: |
+          # Signs the immutable digest with OIDC identity from this workflow run.
           cosign sign --yes "${{ steps.image_ref.outputs.image_name }}"
 
       - name: Verify image signature (Cosign keyless)
         run: |
+          # Verifies certificate identity and issuer match expected GitHub workflow signer.
           expected_identity="https://github.com/${{ github.repository }}/.github/workflows/deploy.yml@refs/heads/main"
 
           cosign verify \
@@ -287,11 +300,14 @@ jobs:
           NOTIFICATION_WEBHOOK_URL: ${{ secrets.NOTIFICATION_WEBHOOK_URL }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          # Skip notification cleanly when webhook is not configured.
           if [ -z "$NOTIFICATION_WEBHOOK_URL" ]; then
             echo "No NOTIFICATION_WEBHOOK_URL configured; skipping notification."
             exit 0
           fi
 
+          # Build JSON payload with python to avoid brittle shell escaping.
           payload=$(python3 -c "import json, os; print(json.dumps({'text': f\"AKS deploy pipeline failed for repository '${{ github.repository }}'. Review run: {os.environ['RUN_URL']}\"}))")
 
+          # POST alert payload to webhook endpoint; `-f` fails on non-2xx HTTP responses.
           curl -fsS -X POST -H 'Content-Type: application/json' --data "$payload" "$NOTIFICATION_WEBHOOK_URL"
