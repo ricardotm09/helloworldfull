@@ -22,4 +22,7 @@ COPY --from=build /app/index.html ./index.html
 
 EXPOSE 3000
 
+# Run as the non-root `node` user provided by the base image.
+USER node
+
 CMD ["node", "server.js"]

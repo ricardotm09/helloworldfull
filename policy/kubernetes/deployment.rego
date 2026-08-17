@@ -9,6 +9,31 @@ deny[msg] {
 
 deny[msg] {
   input.kind == "Deployment"
+  not input.spec.template.spec.securityContext.runAsNonRoot
+  msg := "pod securityContext.runAsNonRoot must be true"
+}
+
+deny[msg] {
+  input.kind == "Deployment"
+  not input.spec.template.spec.securityContext.runAsUser
+  msg := "pod securityContext.runAsUser must be set to a non-root UID"
+}
+
+deny[msg] {
+  input.kind == "Deployment"
+  input.spec.template.spec.securityContext.runAsUser == 0
+  msg := "pod securityContext.runAsUser must not be 0"
+}
+
+deny[msg] {
+  input.kind == "Deployment"
+  container := input.spec.template.spec.containers[_]
+  not container.securityContext.allowPrivilegeEscalation == false
+  msg := sprintf("container %q must set securityContext.allowPrivilegeEscalation to false", [container.name])
+}
+
+deny[msg] {
+  input.kind == "Deployment"
   container := input.spec.template.spec.containers[_]
   not container.resources.requests.cpu
   msg := sprintf("container %q is missing resources.requests.cpu", [container.name])
