@@ -38,7 +38,11 @@ jobs:
             action_repo="${action_ref%@*}"
             major_tag="$comment_tag"
 
-            latest_sha="$(git ls-remote "https://github.com/${action_repo}" "refs/tags/${major_tag}" | awk '{print $1}' | head -n 1)"
+            latest_sha="$(git ls-remote "https://github.com/${action_repo}" "refs/tags/${major_tag}^{}" | awk '{print $1}' | head -n 1)"
+
+            if [ -z "$latest_sha" ]; then
+              latest_sha="$(git ls-remote "https://github.com/${action_repo}" "refs/tags/${major_tag}" | awk '{print $1}' | head -n 1)"
+            fi
 
             if [ -z "$latest_sha" ]; then
               echo "Could not resolve ${action_repo}@${major_tag}; skipping"
