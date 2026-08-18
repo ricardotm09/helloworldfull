@@ -160,6 +160,7 @@ jobs:
           fi
 
           envsubst < k8s/deployment.yaml | kubectl apply -n "${{ env.K8S_NAMESPACE }}" -f -
+          kubectl apply -n "${{ env.K8S_NAMESPACE }}" -f k8s/pdb.yaml
         env:
           IMAGE_NAME: ${{ inputs.image_name }}
 

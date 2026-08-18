@@ -256,8 +256,15 @@ jobs:
       resource_group_name: ${{ needs.terraform-apply.outputs.resource_group_name }}
       aks_name: ${{ needs.terraform-apply.outputs.aks_name }}
 
+  monitoring-bootstrap:
+    needs: terraform-apply
+    uses: ./.github/workflows/monitoring-bootstrap.yml
+    with:
+      resource_group_name: ${{ needs.terraform-apply.outputs.resource_group_name }}
+      aks_name: ${{ needs.terraform-apply.outputs.aks_name }}
+
   deploy-dev:
-    needs: [terraform-apply, build-and-sign, kyverno-bootstrap]
+    needs: [terraform-apply, build-and-sign, kyverno-bootstrap, monitoring-bootstrap]
     uses: ./.github/workflows/deploy-environment.yml
     with:
       environment_name: dev
@@ -291,7 +298,7 @@ jobs:
 
   notify-failure:
     runs-on: ubuntu-latest
-    needs: [terraform-plan, terraform-apply, build-and-sign, kyverno-bootstrap, deploy-dev, deploy-stage, deploy-prod]
+    needs: [terraform-plan, terraform-apply, build-and-sign, kyverno-bootstrap, monitoring-bootstrap, deploy-dev, deploy-stage, deploy-prod]
     if: failure()
 
     steps:

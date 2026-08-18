@@ -1,0 +1,99 @@
+name: Bootstrap Monitoring Stack
+
+on:
+  workflow_call:
+    inputs:
+      resource_group_name:
+        required: false
+        type: string
+      aks_name:
+        required: false
+        type: string
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+  AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+  AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Validate Azure auth inputs
+        run: |
+          if [ -z "${{ env.AZURE_CLIENT_ID }}" ] || [ -z "${{ env.AZURE_TENANT_ID }}" ] || [ -z "${{ env.AZURE_SUBSCRIPTION_ID }}" ]; then
+            echo "::error::Missing AZURE_CLIENT_ID, AZURE_TENANT_ID, or AZURE_SUBSCRIPTION_ID. Set them in Repository Settings -> Secrets and variables -> Actions -> Variables."
+            exit 1
+          fi
+
+      - name: Azure login
+        uses: azure/login@1384c340ab2dda50fed2bee3041d1d87018aa5e8 # v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Set up Terraform
+        if: ${{ inputs.resource_group_name == '' || inputs.aks_name == '' }}
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: 1.8.5
+
+      - name: Terraform init
+        if: ${{ inputs.resource_group_name == '' || inputs.aks_name == '' }}
+        working-directory: terraform/environments/dev
+        run: |
+          terraform init -reconfigure
+
+      - name: Resolve deployment targets
+        id: targets
+        working-directory: terraform/environments/dev
+        run: |
+          if [ -n "${{ inputs.resource_group_name }}" ] && [ -n "${{ inputs.aks_name }}" ]; then
+            echo "resource_group_name=${{ inputs.resource_group_name }}" >> "$GITHUB_OUTPUT"
+            echo "aks_name=${{ inputs.aks_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "resource_group_name=$(terraform output -raw resource_group_name)" >> "$GITHUB_OUTPUT"
+            echo "aks_name=$(terraform output -raw aks_name)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set AKS context
+        run: |
+          az extension remove --name aks-preview >/dev/null 2>&1 || true
+          az aks get-credentials --resource-group "${{ steps.targets.outputs.resource_group_name }}" --name "${{ steps.targets.outputs.aks_name }}" --overwrite-existing
+
+      - name: Install Helm
+        uses: azure/setup-helm@fe8512fb00b1466bc5f051ad0f832d68c7b5ecdf # v4.3.0
+
+      - name: Create monitoring namespace
+        run: |
+          kubectl get namespace monitoring >/dev/null 2>&1 || kubectl create namespace monitoring
+
+      - name: Deploy kube-prometheus-stack
+        run: |
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm repo update
+
+          helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+            --namespace monitoring \
+            --values k8s/monitoring/kube-prometheus-stack-values.yaml \
+            --version 65.2.0 \
+            --wait --timeout 10m
+
+      - name: Apply ServiceMonitor for click-counter
+        run: |
+          kubectl apply -f k8s/monitoring/click-counter-servicemonitor.yaml
+
+      - name: Verify monitoring resources
+        run: |
+          kubectl get pods -n monitoring
+          kubectl get servicemonitor click-counter -n monitoring

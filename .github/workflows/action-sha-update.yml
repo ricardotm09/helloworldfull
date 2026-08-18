@@ -26,6 +26,7 @@ jobs:
             ".github/workflows/deploy.yml"
             ".github/workflows/deploy-environment.yml"
             ".github/workflows/kyverno-bootstrap.yml"
+            ".github/workflows/monitoring-bootstrap.yml"
             ".github/workflows/pr-validation.yml"
             ".github/workflows/terraform-drift-detection.yml"
           )
@@ -59,6 +60,7 @@ jobs:
           docker/setup-buildx-action@sha v3
           docker/build-push-action@sha v6
           sigstore/cosign-installer@sha v4.1.2
+          azure/setup-helm@sha v4.3.0
           aquasecurity/tfsec-action@sha v1.0.3
           aquasecurity/trivy-action@sha v0.36.0
           github/codeql-action/upload-sarif@sha v4

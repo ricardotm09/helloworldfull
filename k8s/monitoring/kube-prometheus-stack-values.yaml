@@ -1,0 +1,14 @@
+grafana:
+  defaultDashboardsTimezone: utc
+  adminPassword: prom-operator-change-me
+  service:
+    type: ClusterIP
+
+prometheus:
+  prometheusSpec:
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    retention: 7d
+
+alertmanager:
+  enabled: true

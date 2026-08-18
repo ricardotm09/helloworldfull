@@ -27,6 +27,30 @@ deny[msg] {
 
 deny[msg] {
   input.kind == "Deployment"
+  input.spec.replicas < 2
+  msg := "deployment replicas should be at least 2 for high availability"
+}
+
+deny[msg] {
+  input.kind == "Deployment"
+  input.spec.strategy.type != "RollingUpdate"
+  msg := "deployment strategy.type must be RollingUpdate"
+}
+
+deny[msg] {
+  input.kind == "Deployment"
+  input.spec.strategy.rollingUpdate.maxUnavailable != 0
+  msg := "deployment strategy.rollingUpdate.maxUnavailable must be 0"
+}
+
+deny[msg] {
+  input.kind == "Deployment"
+  input.spec.strategy.rollingUpdate.maxSurge != 1
+  msg := "deployment strategy.rollingUpdate.maxSurge must be 1"
+}
+
+deny[msg] {
+  input.kind == "Deployment"
   container := input.spec.template.spec.containers[_]
   not container.securityContext.allowPrivilegeEscalation == false
   msg := sprintf("container %q must set securityContext.allowPrivilegeEscalation to false", [container.name])
@@ -79,4 +103,10 @@ deny[msg] {
   container := input.spec.template.spec.containers[_]
   not startswith(container.image, "${IMAGE_NAME}")
   msg := sprintf("container %q image must be injected via ${IMAGE_NAME} template", [container.name])
+}
+
+deny[msg] {
+  input.kind == "Service"
+  not input.spec.ports[_].name == "http"
+  msg := "service must define a named port 'http' for stable metrics scraping"
 }

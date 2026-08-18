@@ -137,6 +137,7 @@ The SHA rotation scope includes:
 
 - .github/workflows/deploy.yml
 - .github/workflows/deploy-environment.yml
+- .github/workflows/monitoring-bootstrap.yml
 - .github/workflows/pr-validation.yml
 - .github/workflows/terraform-drift-detection.yml
 
@@ -175,4 +176,18 @@ The SHA rotation scope includes:
 - You can still run `.github/workflows/kyverno-bootstrap.yml` manually after cluster provisioning or for break-glass recovery.
 - This workflow installs Kyverno, creates/refreshes `kyverno-acr-regcred`, and applies the signature verification ClusterPolicy.
 - Reusable app deploy workflow (`deploy-environment.yml`) validates Kyverno prerequisites and focuses only on deployment operations.
+
+## Observability baseline (Prometheus + Grafana)
+- `deploy.yml` calls `.github/workflows/monitoring-bootstrap.yml` before app environment deployments.
+- Monitoring bootstrap installs `kube-prometheus-stack` via Helm in namespace `monitoring`.
+- App metrics are exposed at `GET /metrics` in `server.js` using Prometheus format.
+- `k8s/monitoring/click-counter-servicemonitor.yaml` configures scraping for Services labeled `app: click-counter`.
+- `k8s/deployment.yaml` Service port is named `http` to provide a stable ServiceMonitor endpoint reference.
+
+### Access Grafana (quick check)
+```bash
+kubectl -n monitoring port-forward svc/kube-prometheus-stack-grafana 3000:80
+```
+
+Then open http://localhost:3000
     
