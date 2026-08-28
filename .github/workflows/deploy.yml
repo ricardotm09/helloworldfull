@@ -224,6 +224,26 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
 
+      - name: Summarize Trivy findings
+        if: always()
+        shell: bash
+        run: |
+          if [ ! -f trivy-results.sarif ]; then
+            echo "Trivy SARIF output not found."
+            exit 0
+          fi
+
+          total_results=$(jq '[.runs[].results[]] | length' trivy-results.sarif)
+          echo "Total Trivy findings: ${total_results}"
+
+          if [ "${total_results}" -eq 0 ]; then
+            echo "No findings in SARIF report."
+            exit 0
+          fi
+
+          echo "Top findings (first 20):"
+          jq -r '.runs[].results[] | [.ruleId, .level, .message.text] | @tsv' trivy-results.sarif | head -n 20
+
       - name: Upload Trivy scan results to GitHub Security
         if: always()
         uses: github/codeql-action/upload-sarif@adfda868f108ac4222129de456ea554034a27db7 # v4

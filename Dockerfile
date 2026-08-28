@@ -2,6 +2,9 @@ FROM node:24-alpine AS build
 
 WORKDIR /app
 
+# Pull latest Alpine security patches in the build stage.
+RUN apk upgrade --no-cache
+
 COPY package*.json ./
 RUN npm install --omit=dev
 RUN mkdir -p /app/node_modules
@@ -11,6 +14,9 @@ COPY server.js index.html ./
 FROM node:24-alpine
 
 WORKDIR /app
+
+# Pull latest Alpine security patches in the runtime stage.
+RUN apk upgrade --no-cache
 
 # Keep runtime minimal by removing npm/npx tooling from the final image.
 RUN rm -rf /usr/local/lib/node_modules/npm \
