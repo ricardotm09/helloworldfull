@@ -183,11 +183,8 @@ The SHA rotation scope includes:
 - App metrics are exposed at `GET /metrics` in `server.js` using Prometheus format.
 - `k8s/monitoring/click-counter-servicemonitor.yaml` configures scraping for Services labeled `app: click-counter`.
 - `k8s/deployment.yaml` Service port is named `http` to provide a stable ServiceMonitor endpoint reference.
+- Operations guide (port-forward, PromQL queries, and troubleshooting): `docs/observability-runbook.md`
 
-### Access Grafana (quick check)
-```bash
-kubectl -n monitoring port-forward svc/kube-prometheus-stack-grafana 3000:80
-```
-
-Then open http://localhost:3000
+## Interview Preparation
+- Senior-level workflow explanation and concept guide: `docs/senior-devops-interview-workflow-guide.md`
     

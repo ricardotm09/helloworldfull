@@ -93,7 +93,12 @@ jobs:
         run: |
           kubectl apply -f k8s/monitoring/click-counter-servicemonitor.yaml
 
+      - name: Apply PrometheusRule alerts for click-counter
+        run: |
+          kubectl apply -f k8s/monitoring/click-counter-alert-rules.yaml
+
       - name: Verify monitoring resources
         run: |
           kubectl get pods -n monitoring
           kubectl get servicemonitor click-counter -n monitoring
+          kubectl get prometheusrule click-counter-alerts -n monitoring

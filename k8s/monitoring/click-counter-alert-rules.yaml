@@ -1,0 +1,20 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: click-counter-alerts
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: click-counter.rules
+      rules:
+        - alert: HighClickRate
+          expr: sum(increase(click_counter_click_events_total[5m])) > 25
+          for: 2m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: "High click volume detected"
+            description: "Click counter received more than 25 events in the last 5 minutes."
