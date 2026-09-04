@@ -25,6 +25,10 @@ provider "azurerm" {
   features {}
 }
 
+locals {
+  acr_name = substr(lower("${var.acr_name}${random_string.acr_suffix.result}"), 0, 50)
+}
+
 data "azurerm_monitor_diagnostic_categories" "aks" {
   resource_id = azurerm_kubernetes_cluster.aks.id
 }
@@ -56,7 +60,7 @@ resource "azurerm_log_analytics_workspace" "platform" {
 }
 
 resource "azurerm_container_registry" "acr" {
-  name                = var.acr_name
+  name                = local.acr_name
   resource_group_name = azurerm_resource_group.rg.name
   location            = azurerm_resource_group.rg.location
   sku                 = "Basic"
@@ -184,7 +188,7 @@ resource "azurerm_monitor_metric_alert" "acr_storage_used_high" {
 resource "azurerm_monitor_activity_log_alert" "aks_write_failure" {
   name                = "${var.aks_name}-write-failure"
   resource_group_name = azurerm_resource_group.rg.name
-  location            = azurerm_resource_group.rg.location
+  location            = "global"
   scopes              = [azurerm_kubernetes_cluster.aks.id]
   description         = "Alert when AKS control plane write operations fail in Azure activity logs."
 
