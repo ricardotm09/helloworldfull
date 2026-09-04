@@ -1,0 +1,59 @@
+Candidate Technical Pre-Assessment
+Returnable PDF form for Terraform, Azure, AWS, CI/CD and IaC experience validation
+Audience
+Candidates applying for Enterprise Architect or Cloud Engineer roles
+Instructions
+Please complete this assessment before the technical interview and return the PDF. Answers should describe work you
+personally performed. For open questions, provide 4-5 sentences unless stated otherwise. If a topic was handled by
+another team, clearly state your own involvement.
+Candidate name: 
+Role applied for: 
+Current/most recent employer: 
+Date completed: 
+Self-assessment ratings
+Rate yourself from 1 to 5. 1 = beginner, 3 = working knowledge, 5 = expert / can lead others.
+Technology
+Rating
+Short comment
+Terraform
+Azure
+AWS
+Git
+CI/CD
+Azure DevOps
+GitHub Actions
+PowerShell
+Python
+Linux
+Security/IAM
+Compliance/Governance
+Describe a Terraform solution you personally implemented.
+Use 4-5 sentences. Include cloud provider, resources deployed, environments, state management, and your personal role.
+Candidate response:
+Explain how Terraform state was managed in your project.
+Use 4-5 sentences. Include backend, locking, access control, and any issues you handled.
+Candidate response: 
+Explain how Terraform authenticated to Azure or AWS in your CI/CD pipeline.
+Use 4-5 sentences. Include Service Principal, Managed Identity, OIDC, IAM role, secrets, or equivalent.
+Candidate response
+Describe a CI/CD pipeline you personally built or maintained for infrastructure
+deployment
+Use 4-5 sentences. Include source control, validation, approvals, deployment stages, and rollback or recovery approach.
+Candidate response
+Describe how your team promoted infrastructure changes across DEV, UAT, and 
+PROD
+Use 4-5 sentences. Include environment separation, approvals, variables, state separation, and release controls.
+Candidate response
+Describe a Terraform deployment failure or incident you personally helped resolve.
+Use 4-5 sentences. Include symptoms, investigation steps, root cause, fix, and prevention.
+Candidate response
+Describe cloud security or compliance controls you implemented.
+Use 4-5 sentences. Include RBAC/IAM, network controls, policies, control checks, or audit requirements.
+Candidate response
+Architect candidates only: describe how you would design an enterprise IaC platform
+Use 6-8 sentences. Include governance, modules, landing zones, pipeline controls, auditability, compliance, and separation of duties.
+Candidate response
+Declaration
+I confirm that the examples provided in this assessment reflect my own experience and contribution. Where work was completed by a broader team, I have clearly described my own role and responsibilities. 
+Candidate signature / typed name
+Date

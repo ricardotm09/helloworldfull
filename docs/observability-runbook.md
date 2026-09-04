@@ -6,6 +6,11 @@ This runbook covers day-to-day Prometheus and Grafana usage for the click-counte
 - AKS context is configured and points to the expected cluster.
 - Monitoring namespace and stack are present.
 
+## Dual Monitoring Model
+- Prometheus and Grafana cover Kubernetes and app-level scraping for `/metrics`.
+- Azure Monitor and Log Analytics cover Azure-native diagnostics, Container Insights, and platform alerting for AKS and ACR.
+- Use Prometheus for workload behavior and Azure Monitor for managed service telemetry, activity logs, and centralized Azure diagnostics.
+
 ## Verify Monitoring Health
 ```bash
 kubectl get ns monitoring
@@ -59,31 +64,43 @@ curl -s "http://localhost:9090/api/v1/targets?state=active" | grep -i click-coun
 ## Grafana Query Cheatsheet
 
 ### Total requests
+Measures the cumulative number of HTTP requests processed by the app across all pods since each pod started.
+
 ```promql
 sum(click_counter_http_requests_total)
 ```
 
 ### Request rate (5m)
+Measures average requests per second (RPS) over the last 5 minutes across all pods. Use this for traffic intensity trends.
+
 ```promql
 sum(rate(click_counter_http_requests_total[5m]))
 ```
 
 ### P95 latency (seconds)
+Measures the 95th percentile request duration over the last 5 minutes. In plain terms, 95% of requests are at or below this value, and 5% are slower.
+
 ```promql
 histogram_quantile(0.95, sum by (le) (rate(click_counter_http_request_duration_seconds_bucket[5m])))
 ```
 
 ### Total clicks (all pods)
+Measures the cumulative number of click events observed by the app across all pods since pod start.
+
 ```promql
 sum(click_counter_click_events_total)
 ```
 
 ### Clicks in last 5 minutes (rounded)
+Measures how many click events occurred in the last 5 minutes across all pods. Rounded for easier reading in dashboards.
+
 ```promql
 round(sum(increase(click_counter_click_events_total[5m])))
 ```
 
 ### Clicks in last 5 minutes by pod (debug)
+Measures 5-minute click totals split by pod. Useful to detect uneven traffic distribution or pod-specific issues.
+
 ```promql
 sum by (pod) (increase(click_counter_click_events_total[5m]))
 ```

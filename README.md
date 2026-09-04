@@ -185,6 +185,13 @@ The SHA rotation scope includes:
 - `k8s/deployment.yaml` Service port is named `http` to provide a stable ServiceMonitor endpoint reference.
 - Operations guide (port-forward, PromQL queries, and troubleshooting): `docs/observability-runbook.md`
 
+## Azure-native observability baseline
+- Terraform now provisions a Log Analytics workspace for platform telemetry.
+- AKS is connected to that workspace through Container Insights (`oms_agent`) for Azure-native cluster monitoring.
+- Azure Monitor diagnostic settings stream supported AKS and ACR logs/metrics into Log Analytics.
+- Azure Monitor alert resources provide a starter baseline for ACR storage growth and failed AKS write operations.
+- To send Azure Monitor notifications, set `monitor_alert_email_address` in Terraform inputs; if left empty, alerts are created without an action group.
+
 ## Interview Preparation
 - Senior-level workflow explanation and concept guide: `docs/senior-devops-interview-workflow-guide.md`
     

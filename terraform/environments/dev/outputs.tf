@@ -17,3 +17,11 @@ output "aks_name" {
 output "aks_fqdn" {
   value = azurerm_kubernetes_cluster.aks.fqdn
 }
+
+output "log_analytics_workspace_name" {
+  value = azurerm_log_analytics_workspace.platform.name
+}
+
+output "log_analytics_workspace_id" {
+  value = azurerm_log_analytics_workspace.platform.id
+}

@@ -40,6 +40,30 @@ variable "aks_vm_size" {
   default     = "Standard_B2s"
 }
 
+variable "log_analytics_workspace_name" {
+  description = "Name of the Log Analytics workspace used for AKS Container Insights and Azure diagnostics"
+  type        = string
+  default     = "law-helloworldfull-dev"
+}
+
+variable "log_analytics_retention_in_days" {
+  description = "Retention period for Log Analytics data"
+  type        = number
+  default     = 30
+}
+
+variable "monitor_alert_email_address" {
+  description = "Optional email address to receive Azure Monitor alerts"
+  type        = string
+  default     = "ricardotm9@outlook.com"
+}
+
+variable "acr_storage_used_threshold_bytes" {
+  description = "Threshold in bytes for Azure Container Registry storage usage alerts"
+  type        = number
+  default     = 2147483648
+}
+
 variable "tags" {
   description = "Tags to apply to the resources"
   type        = map(string)
