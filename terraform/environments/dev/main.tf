@@ -167,7 +167,7 @@ resource "azurerm_monitor_metric_alert" "acr_storage_used_high" {
   severity            = 3
   enabled             = true
   frequency           = "PT5M"
-  window_size         = "PT15M"
+  window_size         = "PT1H"
 
   criteria {
     metric_namespace = "Microsoft.ContainerRegistry/registries"
