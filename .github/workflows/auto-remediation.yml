@@ -87,10 +87,16 @@ jobs:
 
             failed_steps="$(echo "$jobs_json" | jq -r '.jobs[] | .steps[]? | select(.conclusion == "failure") | .name')"
 
-            if [ "$workflow_name" = "PR Validation" ] && echo "$failed_steps" | grep -q "Terraform format check"; then
+            if [ "$workflow_name" = "PR Validation" ]; then
               should_remediate="true"
               remediation_type="terraform_fmt"
-              remediation_reason="PR Validation failed in Terraform format check."
+
+              if echo "$failed_steps" | grep -q "Terraform format check"; then
+                remediation_reason="PR Validation failed in Terraform format check."
+              else
+                remediation_reason="PR Validation failed; applying safe terraform fmt remediation attempt."
+              fi
+
               target_ref="${{ github.event.workflow_run.head_branch }}"
               pr_base_ref="${{ github.event.workflow_run.head_branch }}"
             elif [ "$workflow_name" = "Enforce Action Pinning" ] && echo "$failed_steps" | grep -q "Validate all GitHub Actions are SHA pinned"; then
