@@ -107,6 +107,11 @@ deny[msg] {
 
 deny[msg] {
   input.kind == "Service"
-  not input.spec.ports[_].name == "http"
+  not service_has_http_port
   msg := "service must define a named port 'http' for stable metrics scraping"
+}
+
+service_has_http_port {
+  some i
+  input.spec.ports[i].name == "http"
 }
