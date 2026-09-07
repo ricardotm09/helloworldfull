@@ -35,9 +35,9 @@ variable "aks_node_count" {
 }
 
 variable "aks_vm_size" {
-  description = "VM size for AKS nodes"
-  type        = string
-  default     = "Standard_B2s"
+  description      =   "VM size for AKS nodes"
+  type=string
+  default ="Standard_B2s"
 }
 
 variable "log_analytics_workspace_name" {
