@@ -1,0 +1,219 @@
+name: Auto Remediation PR
+
+on:
+  workflow_run:
+    workflows:
+      - PR Validation
+      - Enforce Action Pinning
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      remediation_type:
+        description: Remediation to run manually
+        required: false
+        type: choice
+        default: auto
+        options:
+          - auto
+          - terraform_fmt
+          - action_sha_rotate
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+
+jobs:
+  classify:
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event.workflow_run.conclusion == 'failure' &&
+        github.event.workflow_run.event == 'pull_request' &&
+        github.event.workflow_run.head_repository.full_name == github.repository &&
+        github.event.workflow_run.actor.login != 'github-actions[bot]' &&
+        !startsWith(github.event.workflow_run.head_branch, 'bot/auto-remediate-')
+      )
+    outputs:
+      should_remediate: ${{ steps.detect.outputs.should_remediate }}
+      remediation_type: ${{ steps.detect.outputs.remediation_type }}
+      remediation_reason: ${{ steps.detect.outputs.remediation_reason }}
+
+    steps:
+      - name: Detect known remediation path
+        id: detect
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          should_remediate="false"
+          remediation_type="none"
+          remediation_reason="No supported remediation matched the failure."
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            selected="${{ inputs.remediation_type }}"
+
+            if [ "$selected" = "auto" ] || [ -z "$selected" ]; then
+              remediation_reason="Manual dispatch requested without a specific remediation type."
+            else
+              should_remediate="true"
+              remediation_type="$selected"
+              remediation_reason="Manual dispatch selected remediation type: $selected"
+            fi
+          else
+            run_id="${{ github.event.workflow_run.id }}"
+            workflow_name="${{ github.event.workflow_run.name }}"
+
+            jobs_json="$(curl -fsSL \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              "${{ github.api_url }}/repos/${{ github.repository }}/actions/runs/${run_id}/jobs?per_page=100")"
+
+            failed_steps="$(echo "$jobs_json" | jq -r '.jobs[] | .steps[]? | select(.conclusion == "failure") | .name')"
+
+            if [ "$workflow_name" = "PR Validation" ] && echo "$failed_steps" | grep -q "Terraform format check"; then
+              should_remediate="true"
+              remediation_type="terraform_fmt"
+              remediation_reason="PR Validation failed in Terraform format check."
+            elif [ "$workflow_name" = "Enforce Action Pinning" ] && echo "$failed_steps" | grep -q "Validate all GitHub Actions are SHA pinned"; then
+              should_remediate="true"
+              remediation_type="action_sha_rotate"
+              remediation_reason="Action pinning workflow found unpinned or outdated references."
+            else
+              remediation_reason="Failure detected, but no deterministic remediation rule matched."
+            fi
+          fi
+
+          echo "should_remediate=${should_remediate}" >> "$GITHUB_OUTPUT"
+          echo "remediation_type=${remediation_type}" >> "$GITHUB_OUTPUT"
+          echo "remediation_reason=${remediation_reason}" >> "$GITHUB_OUTPUT"
+
+      - name: Print classification result
+        shell: bash
+        run: |
+          echo "should_remediate: ${{ steps.detect.outputs.should_remediate }}"
+          echo "remediation_type: ${{ steps.detect.outputs.remediation_type }}"
+          echo "remediation_reason: ${{ steps.detect.outputs.remediation_reason }}"
+
+  remediate:
+    runs-on: ubuntu-latest
+    needs: classify
+    if: needs.classify.outputs.should_remediate == 'true'
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+
+      - name: Set up Terraform
+        if: needs.classify.outputs.remediation_type == 'terraform_fmt'
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: 1.8.5
+
+      - name: Apply Terraform format remediation
+        if: needs.classify.outputs.remediation_type == 'terraform_fmt'
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform fmt -recursive terraform/environments/dev
+
+      - name: Apply action SHA remediation
+        if: needs.classify.outputs.remediation_type == 'action_sha_rotate'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          files=(
+            ".github/workflows/auto-remediation.yml"
+            ".github/workflows/deploy.yml"
+            ".github/workflows/deploy-environment.yml"
+            ".github/workflows/kyverno-bootstrap.yml"
+            ".github/workflows/monitoring-bootstrap.yml"
+            ".github/workflows/pr-validation.yml"
+            ".github/workflows/terraform-drift-detection.yml"
+          )
+
+          while IFS= read -r line; do
+            action_ref="$(echo "$line" | awk '{print $1}')"
+            comment_tag="$(echo "$line" | awk '{print $2}')"
+
+            action_repo="${action_ref%@*}"
+            major_tag="$comment_tag"
+
+            latest_sha="$(git ls-remote "https://github.com/${action_repo}" "refs/tags/${major_tag}^{}" | awk '{print $1}' | head -n 1)"
+
+            if [ -z "$latest_sha" ]; then
+              latest_sha="$(git ls-remote "https://github.com/${action_repo}" "refs/tags/${major_tag}" | awk '{print $1}' | head -n 1)"
+            fi
+
+            if [ -z "$latest_sha" ]; then
+              echo "Could not resolve ${action_repo}@${major_tag}; skipping"
+              continue
+            fi
+
+            for file in "${files[@]}"; do
+              if grep -qE "uses: ${action_repo}@[0-9a-f]{40} # ${major_tag}" "$file"; then
+                sed -i -E "s|uses: ${action_repo}@[0-9a-f]{40} # ${major_tag}|uses: ${action_repo}@${latest_sha} # ${major_tag}|g" "$file"
+                echo "Updated ${action_repo} in ${file}"
+              fi
+            done
+          done << 'EOF'
+          actions/checkout@sha v4
+          azure/login@sha v2
+          hashicorp/setup-terraform@sha v3
+          actions/upload-artifact@sha v4
+          actions/download-artifact@sha v4
+          docker/setup-buildx-action@sha v3
+          docker/build-push-action@sha v6
+          sigstore/cosign-installer@sha v4.1.2
+          azure/setup-helm@sha v4.3.0
+          aquasecurity/tfsec-action@sha v1.0.3
+          aquasecurity/trivy-action@sha v0.36.0
+          github/codeql-action/upload-sarif@sha v4
+          peter-evans/create-pull-request@sha v7
+          EOF
+
+      - name: Detect repository changes
+        id: detect_changes
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create remediation pull request
+        if: steps.detect_changes.outputs.has_changes == 'true'
+        uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7
+        with:
+          commit-message: "chore(ci): auto-remediate ${{ needs.classify.outputs.remediation_type }}"
+          title: "chore(ci): auto-remediate ${{ needs.classify.outputs.remediation_type }}"
+          body: |
+            Automated low-risk remediation generated by Auto Remediation PR workflow.
+
+            Source failure details:
+            - Trigger event: `${{ github.event_name }}`
+            - Source workflow: `${{ github.event.workflow_run.name || 'manual-dispatch' }}`
+            - Source run id: `${{ github.event.workflow_run.id || 'n/a' }}`
+
+            Remediation classification:
+            - Type: `${{ needs.classify.outputs.remediation_type }}`
+            - Reason: `${{ needs.classify.outputs.remediation_reason }}`
+
+            Safety model:
+            - Applies deterministic fixes only
+            - Leaves deployment and merge decisions to normal branch protection
+          branch: bot/auto-remediate-${{ needs.classify.outputs.remediation_type }}-${{ github.run_id }}
+          delete-branch: true
+          labels: ci,automation,auto-remediation
+
+      - name: No-op summary
+        if: steps.detect_changes.outputs.has_changes != 'true'
+        run: echo "No file changes were produced by remediation."

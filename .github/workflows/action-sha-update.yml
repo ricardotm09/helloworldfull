@@ -23,6 +23,7 @@ jobs:
           set -euo pipefail
 
           files=(
+            ".github/workflows/auto-remediation.yml"
             ".github/workflows/deploy.yml"
             ".github/workflows/deploy-environment.yml"
             ".github/workflows/kyverno-bootstrap.yml"
@@ -68,6 +69,7 @@ jobs:
           aquasecurity/tfsec-action@sha v1.0.3
           aquasecurity/trivy-action@sha v0.36.0
           github/codeql-action/upload-sarif@sha v4
+          peter-evans/create-pull-request@sha v7
           EOF
 
       - name: Detect changes

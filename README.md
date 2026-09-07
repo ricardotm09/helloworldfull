@@ -135,11 +135,21 @@ It runs on a monthly schedule and can also be run manually. When newer SHAs are 
 
 The SHA rotation scope includes:
 
+- .github/workflows/auto-remediation.yml
 - .github/workflows/deploy.yml
 - .github/workflows/deploy-environment.yml
 - .github/workflows/monitoring-bootstrap.yml
 - .github/workflows/pr-validation.yml
 - .github/workflows/terraform-drift-detection.yml
+
+## Auto-remediation baseline (safe deterministic fixes)
+- `.github/workflows/auto-remediation.yml` listens for failed `PR Validation` and `Enforce Action Pinning` workflow runs raised by pull requests in this repository.
+- It classifies failure steps and applies only low-risk deterministic remediations:
+  - `terraform_fmt`: runs `terraform fmt -recursive terraform/environments/dev` when PR validation fails on Terraform formatting.
+  - `action_sha_rotate`: rotates pinned action SHAs when action pinning checks fail.
+- If a remediation creates a diff, the workflow opens a new pull request with fix details, reason, and trace back to the source failed run.
+- Normal branch protection and required checks still control merge and deployment.
+- Manual execution is available through `workflow_dispatch` with explicit remediation type selection.
 
 ## Security gates added
 - PR validation includes a tfsec scan that fails on HIGH severity Terraform findings.
