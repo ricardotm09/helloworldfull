@@ -147,6 +147,8 @@ The SHA rotation scope includes:
 - It classifies failure steps and applies only low-risk deterministic remediations:
   - `terraform_fmt`: runs `terraform fmt -recursive terraform/environments/dev` when PR validation fails on Terraform formatting.
   - `action_sha_rotate`: rotates pinned action SHAs when action pinning checks fail.
+- For end-to-end verification through `workflow_dispatch`, use `remediation_type: test_pr_path`.
+  - This appends a timestamped line to `.github/auto-remediation/manual-test-marker.log` to guarantee a safe diff and PR creation.
 - If a remediation creates a diff, the workflow opens a new pull request with fix details, reason, and trace back to the source failed run.
 - Normal branch protection and required checks still control merge and deployment.
 - Manual execution is available through `workflow_dispatch` with explicit remediation type selection.

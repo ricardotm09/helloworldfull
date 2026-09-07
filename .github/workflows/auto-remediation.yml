@@ -18,6 +18,12 @@ on:
           - auto
           - terraform_fmt
           - action_sha_rotate
+          - test_pr_path
+      base_ref:
+        description: Branch to remediate when running manually
+        required: false
+        type: string
+        default: main
 
 permissions:
   contents: write
@@ -40,6 +46,8 @@ jobs:
       should_remediate: ${{ steps.detect.outputs.should_remediate }}
       remediation_type: ${{ steps.detect.outputs.remediation_type }}
       remediation_reason: ${{ steps.detect.outputs.remediation_reason }}
+      target_ref: ${{ steps.detect.outputs.target_ref }}
+      pr_base_ref: ${{ steps.detect.outputs.pr_base_ref }}
 
     steps:
       - name: Detect known remediation path
@@ -53,6 +61,8 @@ jobs:
           should_remediate="false"
           remediation_type="none"
           remediation_reason="No supported remediation matched the failure."
+          target_ref="main"
+          pr_base_ref="main"
 
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             selected="${{ inputs.remediation_type }}"
@@ -63,6 +73,8 @@ jobs:
               should_remediate="true"
               remediation_type="$selected"
               remediation_reason="Manual dispatch selected remediation type: $selected"
+              target_ref="${{ inputs.base_ref }}"
+              pr_base_ref="${{ inputs.base_ref }}"
             fi
           else
             run_id="${{ github.event.workflow_run.id }}"
@@ -79,10 +91,14 @@ jobs:
               should_remediate="true"
               remediation_type="terraform_fmt"
               remediation_reason="PR Validation failed in Terraform format check."
+              target_ref="${{ github.event.workflow_run.head_branch }}"
+              pr_base_ref="${{ github.event.workflow_run.head_branch }}"
             elif [ "$workflow_name" = "Enforce Action Pinning" ] && echo "$failed_steps" | grep -q "Validate all GitHub Actions are SHA pinned"; then
               should_remediate="true"
               remediation_type="action_sha_rotate"
               remediation_reason="Action pinning workflow found unpinned or outdated references."
+              target_ref="${{ github.event.workflow_run.head_branch }}"
+              pr_base_ref="${{ github.event.workflow_run.head_branch }}"
             else
               remediation_reason="Failure detected, but no deterministic remediation rule matched."
             fi
@@ -91,6 +107,8 @@ jobs:
           echo "should_remediate=${should_remediate}" >> "$GITHUB_OUTPUT"
           echo "remediation_type=${remediation_type}" >> "$GITHUB_OUTPUT"
           echo "remediation_reason=${remediation_reason}" >> "$GITHUB_OUTPUT"
+          echo "target_ref=${target_ref}" >> "$GITHUB_OUTPUT"
+          echo "pr_base_ref=${pr_base_ref}" >> "$GITHUB_OUTPUT"
 
       - name: Print classification result
         shell: bash
@@ -98,6 +116,8 @@ jobs:
           echo "should_remediate: ${{ steps.detect.outputs.should_remediate }}"
           echo "remediation_type: ${{ steps.detect.outputs.remediation_type }}"
           echo "remediation_reason: ${{ steps.detect.outputs.remediation_reason }}"
+          echo "target_ref: ${{ steps.detect.outputs.target_ref }}"
+          echo "pr_base_ref: ${{ steps.detect.outputs.pr_base_ref }}"
 
   remediate:
     runs-on: ubuntu-latest
@@ -105,10 +125,10 @@ jobs:
     if: needs.classify.outputs.should_remediate == 'true'
 
     steps:
-      - name: Checkout main
+      - name: Checkout target branch
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: main
+          ref: ${{ needs.classify.outputs.target_ref }}
 
       - name: Set up Terraform
         if: needs.classify.outputs.remediation_type == 'terraform_fmt'
@@ -179,6 +199,14 @@ jobs:
           peter-evans/create-pull-request@sha v7
           EOF
 
+      - name: Apply PR path test marker remediation
+        if: needs.classify.outputs.remediation_type == 'test_pr_path'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .github/auto-remediation
+          printf '%s | run_id=%s | actor=%s\n' "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" "${{ github.run_id }}" "${{ github.actor }}" >> .github/auto-remediation/manual-test-marker.log
+
       - name: Detect repository changes
         id: detect_changes
         shell: bash
@@ -211,6 +239,7 @@ jobs:
             - Applies deterministic fixes only
             - Leaves deployment and merge decisions to normal branch protection
           branch: bot/auto-remediate-${{ needs.classify.outputs.remediation_type }}-${{ github.run_id }}
+          base: ${{ needs.classify.outputs.pr_base_ref }}
           delete-branch: true
           labels: ci,automation,auto-remediation
 
